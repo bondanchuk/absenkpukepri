@@ -10,6 +10,7 @@ import 'cloudinary_service.dart';
 
 class CheckInPage extends StatefulWidget {
   final String nip;
+  // Hapus required positions agar tidak error dari HomePage
   const CheckInPage({super.key, required this.nip});
 
   @override
@@ -18,27 +19,84 @@ class CheckInPage extends StatefulWidget {
 
 class _CheckInPageState extends State<CheckInPage> {
   bool _loading = false;
+  bool _isLoadingData = true; // Untuk loading ambil data user
+  bool _isSecurity = false;
 
-  // ✅ Koordinat Kantor
+  String? selectedShift;
+  String debugInfo = "";
+  File? selfiePreview;
+
+  // Koordinat Kantor
   final double officeLat = 0.8969112;
   final double officeLng = 104.4773251;
   final double radiusMeters = 300;
 
-  String debugInfo = "";
-  File? selfiePreview;
-
-  // ✅ Fungsi Cek Belum Waktunya (Sebelum 06.00)
-  bool isTooEarly() {
-    final now = DateTime.now();
-    final startTime = DateTime(now.year, now.month, now.day, 6, 0); // Jam 06:00
-    return now.isBefore(startTime);
+  @override
+  void initState() {
+    super.initState();
+    _fetchUserData();
   }
 
-  // ✅ Fungsi Cek Terlambat (Batas 09.00)
+  // ✅ AMBIL JABATAN DARI FIRESTORE SECARA LANGSUNG
+  Future<void> _fetchUserData() async {
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(widget.nip)
+          .get();
+      if (doc.exists) {
+        String pos = (doc.data()?['positions'] ?? "").toString().toLowerCase();
+        bool sec =
+            pos.contains('security') ||
+            pos.contains('satpam') ||
+            pos.contains('keamanan');
+
+        setState(() {
+          _isSecurity = sec;
+          if (sec) selectedShift = "Shift 1"; // Default awal
+        });
+      }
+    } catch (e) {
+      debugPrint("Error fetching user: $e");
+    } finally {
+      setState(() => _isLoadingData = false);
+    }
+  }
+
+  bool get isFriday {
+    return DateTime.now().weekday == DateTime.friday;
+  }
+
+  // ✅ CEK BELUM WAKTUNYA
+  bool isTooEarly() {
+    final now = DateTime.now();
+    if (_isSecurity) {
+      if (selectedShift == "Shift 1")
+        return now.isBefore(DateTime(now.year, now.month, now.day, 6, 0));
+      if (selectedShift == "Shift 2")
+        return now.isBefore(DateTime(now.year, now.month, now.day, 14, 0));
+      if (selectedShift == "Shift 3")
+        return now.isBefore(DateTime(now.year, now.month, now.day, 22, 0));
+    }
+    return now.isBefore(
+      DateTime(now.year, now.month, now.day, 6, 0),
+    ); // Pegawai Biasa
+  }
+
+  // ✅ CEK TERLAMBAT
   bool isLate() {
     final now = DateTime.now();
-    final deadline = DateTime(now.year, now.month, now.day, 9, 0); // Jam 09:00
-    return now.isAfter(deadline);
+    if (_isSecurity) {
+      if (selectedShift == "Shift 1")
+        return now.isAfter(DateTime(now.year, now.month, now.day, 8, 30));
+      if (selectedShift == "Shift 2")
+        return now.isAfter(DateTime(now.year, now.month, now.day, 15, 30));
+      if (selectedShift == "Shift 3")
+        return false; // Karena batasnya 23:59, hari ini tidak mungkin lewat 23:59
+    }
+    return now.isAfter(
+      DateTime(now.year, now.month, now.day, 9, 0),
+    ); // Pegawai Biasa
   }
 
   String todayDocId() {
@@ -47,21 +105,19 @@ class _CheckInPageState extends State<CheckInPage> {
   }
 
   Future<void> checkIn() async {
-    // ✅ Validasi Waktu Sebelum Proses
     if (isTooEarly()) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text("⏳ Belum waktunya absen. Absen dimulai jam 06.00 WIB."),
+          content: Text("⏳ Belum waktunya absen masuk."),
           backgroundColor: Colors.orange,
         ),
       );
       return;
     }
-
     if (isLate()) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text("❌ Batas waktu absen masuk adalah jam 09.00 WIB."),
+          content: Text("❌ Batas waktu absen masuk telah berakhir."),
           backgroundColor: Colors.red,
         ),
       );
@@ -71,10 +127,7 @@ class _CheckInPageState extends State<CheckInPage> {
     setState(() => _loading = true);
 
     try {
-      // 1) Ambil lokasi
       final pos = await LocationService.getCurrentPosition();
-
-      // Hitung jarak ke kantor
       final dist = LocationService.distanceInMeters(
         pos.latitude,
         pos.longitude,
@@ -84,66 +137,41 @@ class _CheckInPageState extends State<CheckInPage> {
 
       setState(() {
         debugInfo =
-            "Lat: ${pos.latitude}\n"
-            "Lng: ${pos.longitude}\n"
-            "Accuracy: ${pos.accuracy.toStringAsFixed(1)} m\n"
-            "Distance: ${dist.toStringAsFixed(1)} m\n"
-            "Mocked: ${pos.isMocked}";
+            "Distance: ${dist.toStringAsFixed(1)} m\nMocked: ${pos.isMocked}";
       });
 
-      // ✅ Validasi lokasi
-      if (pos.accuracy > 25) {
+      if (pos.accuracy > 25)
+        throw Exception("Akurasi GPS terlalu buruk. Coba di tempat terbuka.");
+      if (pos.isMocked) throw Exception("Fake GPS terdeteksi.");
+
+      bool isWfhValid = isFriday && !_isSecurity;
+      if (!isWfhValid && dist > radiusMeters) {
         throw Exception(
-          "Akurasi GPS terlalu buruk (${pos.accuracy.toStringAsFixed(1)}m).\n"
-          "Coba lagi di tempat terbuka.",
+          "Di luar area kantor.\nJarak Anda: ${dist.toStringAsFixed(1)} m",
         );
       }
 
-      if (pos.isMocked) {
-        throw Exception(
-          "Mock Location terdeteksi.\n"
-          "Matikan Fake GPS / Mock Location.",
-        );
-      }
-
-      if (dist > radiusMeters) {
-        throw Exception(
-          "Di luar area kantor.\n"
-          "Jarak: ${dist.toStringAsFixed(1)} m",
-        );
-      }
-
-      // 2) Ambil selfie
       final picker = ImagePicker();
       final picked = await picker.pickImage(
         source: ImageSource.camera,
         preferredCameraDevice: CameraDevice.front,
         imageQuality: 100,
       );
-
-      if (picked == null) {
-        throw Exception("Selfie wajib untuk absen masuk.");
-      }
+      if (picked == null) throw Exception("Selfie wajib untuk absen masuk.");
 
       final original = File(picked.path);
       setState(() => selfiePreview = original);
 
-      // 3) Compress foto
       final compressed = await CloudinaryService.compressTo200KB(original);
       if (compressed == null) throw Exception("Gagal compress foto.");
 
-      // 4) Upload ke Cloudinary
       final selfieUrl = await CloudinaryService.uploadImage(compressed);
-
-      // 5) Simpan ke Firestore
       final now = DateTime.now();
-      final dateStr = DateFormat("yyyy-MM-dd").format(now);
       final docId = todayDocId();
 
       final docRef = FirebaseFirestore.instance
           .collection("attendance")
           .doc(docId);
-
       final snapshot = await docRef.get();
       if (snapshot.exists && snapshot.data()?["checkInTime"] != null) {
         throw Exception("Kamu sudah absen masuk hari ini ✅");
@@ -151,24 +179,22 @@ class _CheckInPageState extends State<CheckInPage> {
 
       await docRef.set({
         "nip": widget.nip,
-        "date": dateStr,
+        "date": DateFormat("yyyy-MM-dd").format(now),
         "checkInTime": now.toIso8601String(),
         "checkInLat": pos.latitude,
         "checkInLng": pos.longitude,
-        "accuracyIn": pos.accuracy,
         "distanceIn": dist,
-        "isMockDetectedIn": pos.isMocked,
         "checkInSelfieUrl": selfieUrl,
+        "workMode": isWfhValid ? "WFH" : "WFO",
+        "shift": _isSecurity ? selectedShift : "Non-Shift",
         "status": "valid",
         "createdAt": FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
 
       if (!mounted) return;
-
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text("✅ Absen masuk berhasil")));
-
       Navigator.pop(context);
     } catch (e) {
       ScaffoldMessenger.of(
@@ -177,6 +203,15 @@ class _CheckInPageState extends State<CheckInPage> {
     } finally {
       setState(() => _loading = false);
     }
+  }
+
+  String getTimeInfoText() {
+    if (_isSecurity) {
+      if (selectedShift == "Shift 1") return "06.00 s/d 08.30 WIB";
+      if (selectedShift == "Shift 2") return "14.00 s/d 15.30 WIB";
+      if (selectedShift == "Shift 3") return "22.00 s/d 23.59 WIB";
+    }
+    return "06.00 s/d 09.00 WIB";
   }
 
   Widget infoBox(String title, String value, IconData icon, Color color) {
@@ -207,7 +242,10 @@ class _CheckInPageState extends State<CheckInPage> {
                   ),
                 ),
                 const SizedBox(height: 6),
-                Text(value, style: const TextStyle(fontSize: 13)),
+                Text(
+                  value,
+                  style: const TextStyle(fontSize: 13, color: Colors.black87),
+                ),
               ],
             ),
           ),
@@ -218,10 +256,15 @@ class _CheckInPageState extends State<CheckInPage> {
 
   @override
   Widget build(BuildContext context) {
-    // Cek status waktu untuk UI
-    final bool earlyStatus = isTooEarly();
-    final bool lateStatus = isLate();
-    final bool cannotAbsen = earlyStatus || lateStatus;
+    if (_isLoadingData) {
+      return const Scaffold(
+        body: Center(
+          child: CircularProgressIndicator(color: Color(0xFF7A0C10)),
+        ),
+      );
+    }
+
+    final bool cannotAbsen = isTooEarly() || isLate();
 
     return Scaffold(
       backgroundColor: const Color(0xFFF4F6FA),
@@ -231,153 +274,140 @@ class _CheckInPageState extends State<CheckInPage> {
         title: const Text("Absen Masuk"),
       ),
       body: SingleChildScrollView(
-        physics: const BouncingScrollPhysics(),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            children: [
-              // ✅ CARD INFO
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            if (_isSecurity) ...[
               Container(
-                width: double.infinity,
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(18),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.05),
-                      blurRadius: 10,
-                      offset: const Offset(0, 5),
-                    ),
-                  ],
+                  border: Border.all(
+                    color: const Color(0xFF7A0C10),
+                    width: 1.5,
+                  ),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
-                      "Mohon Perhatikan",
+                      "Pilih Shift Anda",
                       style: TextStyle(
-                        fontSize: 16,
                         fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                        color: Color(0xFF7A0C10),
                       ),
                     ),
-                    const SizedBox(height: 14),
-                    infoBox(
-                      "Waktu Absen",
-                      "Mulai jam 06.00 s/d 09.00 WIB",
-                      Icons.access_time_filled,
-                      cannotAbsen ? Colors.orange : Colors.green,
-                    ),
-                    const SizedBox(height: 12),
-                    infoBox(
-                      "Lokasi Kantor",
-                      "Pastikan anda sudah di kantor KPU Provinsi Kepri",
-                      Icons.location_on,
-                      Colors.red,
-                    ),
-                    const SizedBox(height: 12),
-                    infoBox(
-                      "Radius",
-                      "Maksimal radius 300m",
-                      Icons.my_location,
-                      Colors.blue,
-                    ),
-                    const SizedBox(height: 16),
-                    if (debugInfo.isNotEmpty)
-                      infoBox(
-                        "Debug Info",
-                        debugInfo,
-                        Icons.info_outline,
-                        Colors.deepPurple,
-                      ),
-                    if (selfiePreview != null) ...[
-                      const SizedBox(height: 16),
-                      const Text(
-                        "Preview Selfie",
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                      const SizedBox(height: 10),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(16),
-                        child: Image.file(
-                          selfiePreview!,
-                          height: 180,
-                          width: double.infinity,
-                          fit: BoxFit.cover,
+                    const SizedBox(height: 10),
+                    DropdownButtonFormField<String>(
+                      value: selectedShift,
+                      decoration: InputDecoration(
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
                         ),
                       ),
-                    ],
+                      items: ["Shift 1", "Shift 2", "Shift 3"]
+                          .map(
+                            (s) => DropdownMenuItem(
+                              value: s,
+                              child: Text(
+                                s,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (val) => setState(() => selectedShift = val),
+                    ),
                   ],
                 ),
               ),
-
               const SizedBox(height: 20),
-
-              // ✅ BUTTON ABSEN MASUK
-              SizedBox(
-                width: double.infinity,
-                height: 54,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    // Tombol jadi abu-abu jika belum waktunya atau terlambat
-                    backgroundColor: cannotAbsen
-                        ? Colors.grey
-                        : const Color(0xFF7A0C10),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(18),
-                    ),
-                  ),
-                  // Disable tombol jika tidak bisa absen
-                  onPressed: (_loading || cannotAbsen) ? null : checkIn,
-                  child: _loading
-                      ? const SizedBox(
-                          height: 24,
-                          width: 24,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 3,
-                            color: Colors.white,
-                          ),
-                        )
-                      : Text(
-                          earlyStatus
-                              ? "⏳ Belum Waktu Absen"
-                              : lateStatus
-                              ? "❌ Waktu Absen Berakhir"
-                              : "✅ Absen Masuk Sekarang",
-                          style: const TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
-                        ),
-                ),
-              ),
-
-              if (earlyStatus)
-                const Padding(
-                  padding: EdgeInsets.only(top: 12),
-                  child: Text(
-                    "Absen masuk baru bisa dilakukan mulai pukul 06.00 WIB.",
-                    style: TextStyle(
-                      color: Colors.orange,
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-
-              if (lateStatus)
-                const Padding(
-                  padding: EdgeInsets.only(top: 12),
-                  child: Text(
-                    "Sudah melewati jam 09.00. Hubungi Admin jika ada kendala.",
-                    style: TextStyle(color: Colors.red, fontSize: 12),
-                    textAlign: TextAlign.center,
-                  ),
-                ),
             ],
-          ),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(18),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    "Mohon Perhatikan",
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 14),
+                  infoBox(
+                    "Batas Waktu Masuk",
+                    getTimeInfoText(),
+                    Icons.access_time_filled,
+                    cannotAbsen ? Colors.orange : Colors.green,
+                  ),
+                  const SizedBox(height: 12),
+                  infoBox(
+                    isFriday && !_isSecurity
+                        ? "Mode WFH Aktif"
+                        : "Lokasi & Radius",
+                    isFriday && !_isSecurity
+                        ? "Hari Jumat: WFH Diizinkan"
+                        : "Maksimal radius 300m dari KPU",
+                    isFriday && !_isSecurity
+                        ? Icons.home_work
+                        : Icons.my_location,
+                    Colors.blue,
+                  ),
+                  if (selfiePreview != null) ...[
+                    const SizedBox(height: 16),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(16),
+                      child: Image.file(
+                        selfiePreview!,
+                        height: 180,
+                        width: double.infinity,
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
+            SizedBox(
+              width: double.infinity,
+              height: 54,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: cannotAbsen
+                      ? Colors.grey
+                      : const Color(0xFF7A0C10),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                ),
+                onPressed: (_loading || cannotAbsen) ? null : checkIn,
+                child: _loading
+                    ? const CircularProgressIndicator(color: Colors.white)
+                    : Text(
+                        cannotAbsen
+                            ? "❌ Di Luar Waktu Absen"
+                            : "✅ Absen Masuk Sekarang",
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+              ),
+            ),
+          ],
         ),
       ),
     );

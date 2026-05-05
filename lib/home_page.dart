@@ -1,3 +1,4 @@
+import 'dart:async'; // ✅ Tambahan untuk fitur Jam Real-time
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
@@ -20,6 +21,45 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
+  // ✅ Variabel untuk Jam Real-time
+  Timer? _timer;
+  String _currentTime = "";
+
+  @override
+  void initState() {
+    super.initState();
+    // Mengaktifkan Jam Real-time saat halaman dibuka
+    _currentTime = DateFormat('HH:mm:ss').format(DateTime.now());
+    _timer = Timer.periodic(
+      const Duration(seconds: 1),
+      (Timer t) => _updateTime(),
+    );
+  }
+
+  void _updateTime() {
+    if (mounted) {
+      setState(() {
+        _currentTime = DateFormat('HH:mm:ss').format(DateTime.now());
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _timer
+        ?.cancel(); // Mematikan timer saat halaman ditutup agar tidak memory leak
+    super.dispose();
+  }
+
+  // ✅ Fungsi untuk Sapaan Dinamis
+  String getGreeting() {
+    var hour = DateTime.now().hour;
+    if (hour < 11) return "Selamat Pagi,";
+    if (hour < 15) return "Selamat Siang,";
+    if (hour < 18) return "Selamat Sore,";
+    return "Selamat Malam,";
+  }
+
   String todayDocId() {
     final now = DateTime.now();
     return "${widget.nip}_${DateFormat("yyyyMMdd").format(now)}";
@@ -84,14 +124,16 @@ class _HomePageState extends State<HomePage> {
           return CustomScrollView(
             physics: const BouncingScrollPhysics(),
             slivers: [
+              // ✅ HEADER MAROON
               SliverAppBar(
                 pinned: true,
-                expandedHeight: 150,
+                expandedHeight:
+                    140, // ✅ Sedikit dinaikkan untuk menampung Jam Real-time
                 backgroundColor: const Color(0xFF7A0C10),
                 automaticallyImplyLeading: false,
                 flexibleSpace: FlexibleSpaceBar(
                   background: Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 60, 20, 20),
+                    padding: const EdgeInsets.fromLTRB(20, 50, 10, 10),
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -99,13 +141,24 @@ class _HomePageState extends State<HomePage> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
+                              // ✅ SAPAAN PAGI/SIANG/MALAM
+                              Text(
+                                getGreeting(),
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.white70,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
                               Text(
                                 widget.name.toUpperCase(),
                                 style: const TextStyle(
-                                  fontSize: 20,
+                                  fontSize: 18,
                                   fontWeight: FontWeight.bold,
                                   color: Colors.white,
                                 ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
                               const SizedBox(height: 4),
                               StreamBuilder<DocumentSnapshot>(
@@ -127,16 +180,43 @@ class _HomePageState extends State<HomePage> {
                                       fontWeight: FontWeight.w500,
                                       color: Colors.white70,
                                     ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
                                   );
                                 },
                               ),
                               const SizedBox(height: 8),
-                              Text(
-                                todayLabel(),
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.white54,
-                                ),
+                              // ✅ TANGGAL DAN JAM BERDETAK
+                              Row(
+                                children: [
+                                  Text(
+                                    todayLabel(),
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.white54,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 6,
+                                      vertical: 2,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: Colors.black.withOpacity(0.2),
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: Text(
+                                      "$_currentTime WIB",
+                                      style: const TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.white,
+                                        letterSpacing: 1,
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ],
                           ),
@@ -160,11 +240,14 @@ class _HomePageState extends State<HomePage> {
                   ),
                 ),
               ),
+
+              // ✅ BODY CONTENT
               SliverToBoxAdapter(
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(16, 16, 16, 30),
                   child: Column(
                     children: [
+                      // ✅ STATUS CARD
                       _premiumCard(
                         child: Padding(
                           padding: const EdgeInsets.all(14),
@@ -183,21 +266,21 @@ class _HomePageState extends State<HomePage> {
                                 children: [
                                   Expanded(
                                     child: _statusTile(
-                                      title: "Absen Masuk",
+                                      title: "Masuk", // ✅ Teks Dipendekkan
                                       subtitle: sudahMasuk
-                                          ? "Jam $masukJam"
+                                          ? masukJam // ✅ Jam Saja agar muat
                                           : "Belum absen",
                                       icon: Icons.login,
                                       active: sudahMasuk,
                                       color: Colors.green,
                                     ),
                                   ),
-                                  const SizedBox(width: 12),
+                                  const SizedBox(width: 10),
                                   Expanded(
                                     child: _statusTile(
-                                      title: "Absen Pulang",
+                                      title: "Pulang", // ✅ Teks Dipendekkan
                                       subtitle: sudahPulang
-                                          ? "Jam $pulangJam"
+                                          ? pulangJam // ✅ Jam Saja agar muat
                                           : "Belum absen",
                                       icon: Icons.logout,
                                       active: sudahPulang,
@@ -206,7 +289,7 @@ class _HomePageState extends State<HomePage> {
                                   ),
                                 ],
                               ),
-                              const SizedBox(height: 12),
+                              const SizedBox(height: 10),
                               _statusTile(
                                 title: "Laporan Kinerja",
                                 subtitle: reportStatus,
@@ -220,6 +303,8 @@ class _HomePageState extends State<HomePage> {
                         ),
                       ),
                       const SizedBox(height: 16),
+
+                      // ✅ MENU UTAMA
                       _premiumCard(
                         child: Padding(
                           padding: const EdgeInsets.all(16),
@@ -301,6 +386,8 @@ class _HomePageState extends State<HomePage> {
                         ),
                       ),
                       const SizedBox(height: 16),
+
+                      // ✅ RIWAYAT ABSENSI
                       _menuWideButton(
                         icon: Icons.history,
                         label: "Riwayat Absensi",
@@ -358,6 +445,7 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  // ✅ Ikon (X) tetap dihapus, ukuran Font disesuaikan
   Widget _statusTile({
     required String title,
     required String subtitle,
@@ -368,7 +456,7 @@ class _HomePageState extends State<HomePage> {
   }) {
     return Container(
       width: fullWidth ? double.infinity : null,
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: const Color(0xFFF8FAFD),
         borderRadius: BorderRadius.circular(16),
@@ -377,11 +465,11 @@ class _HomePageState extends State<HomePage> {
       child: Row(
         children: [
           CircleAvatar(
-            radius: 22,
+            radius: 20,
             backgroundColor: color.withOpacity(0.15),
-            child: Icon(icon, color: color),
+            child: Icon(icon, color: color, size: 20),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 8),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -390,24 +478,29 @@ class _HomePageState extends State<HomePage> {
                   title,
                   style: const TextStyle(
                     fontWeight: FontWeight.bold,
-                    fontSize: 14,
+                    fontSize: 13,
                   ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
-                const SizedBox(height: 6),
+                const SizedBox(height: 4),
                 Text(
                   subtitle,
                   style: TextStyle(
-                    fontSize: 13,
+                    fontSize: 11,
                     color: active ? Colors.black87 : Colors.black54,
+                    fontWeight: active ? FontWeight.bold : FontWeight.normal,
                   ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ],
             ),
           ),
-          Icon(
-            active ? Icons.check_circle : Icons.cancel,
-            color: active ? Colors.green : Colors.grey,
-          ),
+          if (active) ...[
+            const SizedBox(width: 4),
+            const Icon(Icons.check_circle, color: Colors.green, size: 18),
+          ],
         ],
       ),
     );
@@ -415,9 +508,8 @@ class _HomePageState extends State<HomePage> {
 }
 
 // ======================================================
-// ✅ BAGIAN YANG MUNGKIN TADI TERHAPUS (Class PremiumMenuButton)
+// Premium Menu Button (square)
 // ======================================================
-
 class PremiumMenuButton extends StatelessWidget {
   final IconData icon;
   final String label;
@@ -434,7 +526,7 @@ class PremiumMenuButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color bg = enabled ? const Color(0xFF1565C0) : Colors.grey.shade400;
+    final Color bg = enabled ? const Color(0xFF1565C0) : Colors.grey.shade500;
     return Material(
       color: bg,
       borderRadius: BorderRadius.circular(18),
@@ -444,7 +536,7 @@ class PremiumMenuButton extends StatelessWidget {
         child: SizedBox(
           height: 110,
           child: Padding(
-            padding: const EdgeInsets.all(14),
+            padding: const EdgeInsets.all(12),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
@@ -472,6 +564,9 @@ class PremiumMenuButton extends StatelessWidget {
   }
 }
 
+// ======================================================
+// Premium Menu Button Wide
+// ======================================================
 class PremiumMenuButtonWide extends StatelessWidget {
   final IconData icon;
   final String label;
@@ -490,7 +585,7 @@ class PremiumMenuButtonWide extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color bg = enabled ? const Color(0xFF1565C0) : Colors.grey.shade400;
+    final Color bg = enabled ? const Color(0xFF1565C0) : Colors.grey.shade500;
     return Material(
       color: bg,
       borderRadius: BorderRadius.circular(18),
