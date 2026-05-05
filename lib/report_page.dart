@@ -6,11 +6,7 @@ class ReportPage extends StatefulWidget {
   final String nip;
   final String docId;
 
-  const ReportPage({
-    super.key,
-    required this.nip,
-    required this.docId,
-  });
+  const ReportPage({super.key, required this.nip, required this.docId});
 
   @override
   State<ReportPage> createState() => _ReportPageState();
@@ -29,10 +25,19 @@ class _ReportPageState extends State<ReportPage> {
     loadExistingReport();
   }
 
+  // ✅ Fungsi Cek Batas Waktu (23.59)
+  bool isExpired() {
+    final now = DateTime.now();
+    // Batas pengisian adalah pukul 23:59:59 pada hari yang sama
+    final deadline = DateTime(now.year, now.month, now.day, 23, 59, 59);
+    return now.isAfter(deadline);
+  }
+
   /// ✅ load report jika sudah pernah isi
   Future<void> loadExistingReport() async {
-    final docRef =
-        FirebaseFirestore.instance.collection("attendance").doc(widget.docId);
+    final docRef = FirebaseFirestore.instance
+        .collection("attendance")
+        .doc(widget.docId);
     final snapshot = await docRef.get();
 
     if (snapshot.exists) {
@@ -46,13 +51,27 @@ class _ReportPageState extends State<ReportPage> {
   }
 
   Future<void> submitReport() async {
+    // ✅ Validasi Batas Waktu
+    if (isExpired()) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            "❌ Batas waktu pengisian laporan hari ini telah berakhir.",
+          ),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
     if (!_formKey.currentState!.validate()) return;
 
     setState(() => _loading = true);
 
     try {
-      final docRef =
-          FirebaseFirestore.instance.collection("attendance").doc(widget.docId);
+      final docRef = FirebaseFirestore.instance
+          .collection("attendance")
+          .doc(widget.docId);
 
       await docRef.set({
         "performanceReport": {
@@ -72,9 +91,9 @@ class _ReportPageState extends State<ReportPage> {
 
       Navigator.pop(context);
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("❌ Error: $e")),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text("❌ Error: $e")));
     } finally {
       setState(() => _loading = false);
     }
@@ -109,10 +128,7 @@ class _ReportPageState extends State<ReportPage> {
           const SizedBox(height: 6),
           Text(
             dateLabel,
-            style: const TextStyle(
-              fontSize: 13,
-              color: Colors.white70,
-            ),
+            style: const TextStyle(fontSize: 13, color: Colors.white70),
           ),
         ],
       ),
@@ -161,18 +177,21 @@ class _ReportPageState extends State<ReportPage> {
 
   @override
   Widget build(BuildContext context) {
-    final dateLabel =
-        DateFormat("EEEE, dd MMMM yyyy", "id_ID").format(DateTime.now());
+    final bool expiredStatus = isExpired();
+    final dateLabel = DateFormat(
+      "EEEE, dd MMMM yyyy",
+      "id_ID",
+    ).format(DateTime.now());
 
-    final attendanceRef =
-        FirebaseFirestore.instance.collection("attendance").doc(widget.docId);
+    final attendanceRef = FirebaseFirestore.instance
+        .collection("attendance")
+        .doc(widget.docId);
 
     return Scaffold(
       backgroundColor: const Color(0xFFF4F6FA),
       body: Column(
         children: [
           _header(dateLabel),
-
           Expanded(
             child: StreamBuilder<DocumentSnapshot>(
               stream: attendanceRef.snapshots(),
@@ -186,15 +205,18 @@ class _ReportPageState extends State<ReportPage> {
                   sudahReport = data["reportSubmitted"] == true;
                 }
 
-                // ✅ Jika belum checkout, tampilkan warning card
                 if (!sudahCheckout) {
                   return Padding(
                     padding: const EdgeInsets.all(16),
                     child: _card(
                       child: Column(
+                        mainAxisSize: MainAxisSize.min,
                         children: const [
-                          Icon(Icons.info_outline,
-                              size: 48, color: Colors.orange),
+                          Icon(
+                            Icons.info_outline,
+                            size: 48,
+                            color: Colors.orange,
+                          ),
                           SizedBox(height: 12),
                           Text(
                             "Laporan hanya bisa diisi setelah absen pulang.",
@@ -208,7 +230,10 @@ class _ReportPageState extends State<ReportPage> {
                           Text(
                             "Silakan lakukan absen pulang terlebih dahulu.",
                             textAlign: TextAlign.center,
-                            style: TextStyle(fontSize: 13, color: Colors.black54),
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: Colors.black54,
+                            ),
                           ),
                         ],
                       ),
@@ -248,6 +273,33 @@ class _ReportPageState extends State<ReportPage> {
                           ),
                         ),
 
+                      if (expiredStatus)
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(14),
+                          margin: const EdgeInsets.only(bottom: 16),
+                          decoration: BoxDecoration(
+                            color: Colors.red.withOpacity(0.12),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: Colors.red.shade200),
+                          ),
+                          child: Row(
+                            children: const [
+                              Icon(Icons.error_outline, color: Colors.red),
+                              SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  "Waktu pengisian laporan sudah berakhir (Batas: 23:59) ❌",
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.red,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+
                       _card(
                         child: Form(
                           key: _formKey,
@@ -262,13 +314,14 @@ class _ReportPageState extends State<ReportPage> {
                                 ),
                               ),
                               const SizedBox(height: 14),
-
                               TextFormField(
                                 controller: tasksController,
                                 maxLines: 5,
+                                enabled:
+                                    !expiredStatus, // Disable field jika expired
                                 decoration: _inputDecoration(
                                   "Pekerjaan hari ini (wajib)",
-                                  "Contoh: Membuat UI dashboard, update absensi, perbaiki bug...",
+                                  "Contoh: Menghadiri rapat, update data pemilih...",
                                 ),
                                 validator: (value) {
                                   if (value == null || value.trim().isEmpty) {
@@ -277,31 +330,33 @@ class _ReportPageState extends State<ReportPage> {
                                   return null;
                                 },
                               ),
-
                               const SizedBox(height: 14),
-
                               TextFormField(
                                 controller: notesController,
                                 maxLines: 4,
+                                enabled:
+                                    !expiredStatus, // Disable field jika expired
                                 decoration: _inputDecoration(
                                   "Catatan tambahan (opsional)",
-                                  "Contoh: Kendala hari ini / progress / kebutuhan support...",
+                                  "Contoh: Kendala di lapangan / progress...",
                                 ),
                               ),
-
                               const SizedBox(height: 20),
-
                               SizedBox(
                                 width: double.infinity,
                                 height: 54,
                                 child: ElevatedButton(
                                   style: ElevatedButton.styleFrom(
-                                    backgroundColor: const Color(0xFF7A0C10),
+                                    backgroundColor: expiredStatus
+                                        ? Colors.grey
+                                        : const Color(0xFF7A0C10),
                                     shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(18),
                                     ),
                                   ),
-                                  onPressed: _loading ? null : submitReport,
+                                  onPressed: (_loading || expiredStatus)
+                                      ? null
+                                      : submitReport,
                                   child: _loading
                                       ? const SizedBox(
                                           height: 24,
@@ -311,9 +366,11 @@ class _ReportPageState extends State<ReportPage> {
                                             color: Colors.white,
                                           ),
                                         )
-                                      : const Text(
-                                          "✅ Kirim Laporan",
-                                          style: TextStyle(
+                                      : Text(
+                                          expiredStatus
+                                              ? "Waktu Berakhir"
+                                              : "✅ Kirim Laporan",
+                                          style: const TextStyle(
                                             fontSize: 15,
                                             fontWeight: FontWeight.bold,
                                             color: Colors.white,
@@ -325,10 +382,9 @@ class _ReportPageState extends State<ReportPage> {
                           ),
                         ),
                       ),
-
                       const SizedBox(height: 30),
                       const Text(
-                        "Tim IT Diskominfo Kabupaten Bintan 2025",
+                        "KPU Provinsi Kepulauan Riau 2026",
                         style: TextStyle(color: Colors.black54, fontSize: 12),
                       ),
                       const SizedBox(height: 10),

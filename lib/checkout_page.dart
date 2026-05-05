@@ -27,19 +27,39 @@ class _CheckOutPageState extends State<CheckOutPage> {
   String debugInfo = "";
   File? selfiePreview;
 
+  // ✅ Fungsi Cek Batas Waktu (23.59)
+  bool isExpired() {
+    final now = DateTime.now();
+    // Batas adalah jam 23:59:59 pada hari yang sama
+    final deadline = DateTime(now.year, now.month, now.day, 23, 59, 59);
+    return now.isAfter(deadline);
+  }
+
   String todayDocId() {
     final now = DateTime.now();
     return "${widget.nip}_${DateFormat("yyyyMMdd").format(now)}";
   }
 
   Future<void> checkOut() async {
+    // ✅ Validasi Batas Waktu
+    if (isExpired()) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("❌ Batas waktu absen pulang hari ini telah berakhir."),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
     setState(() => _loading = true);
 
     try {
       // ✅ 0) Cek doc attendance hari ini
       final docId = todayDocId();
-      final docRef =
-          FirebaseFirestore.instance.collection("attendance").doc(docId);
+      final docRef = FirebaseFirestore.instance
+          .collection("attendance")
+          .doc(docId);
 
       final snapshot = await docRef.get();
 
@@ -144,23 +164,21 @@ class _CheckOutPageState extends State<CheckOutPage> {
         "distanceOut": dist,
         "isMockDetectedOut": pos.isMocked,
         "checkOutSelfieUrl": selfieUrl,
-
-        // Optional: status pulang
         "checkOutStatus": "valid",
         "updatedAt": FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
 
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("✅ Absen pulang berhasil")),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("✅ Absen pulang berhasil")));
 
       Navigator.pop(context);
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("❌ $e")),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text("❌ $e")));
     } finally {
       setState(() => _loading = false);
     }
@@ -195,10 +213,7 @@ class _CheckOutPageState extends State<CheckOutPage> {
                   ),
                 ),
                 const SizedBox(height: 6),
-                Text(
-                  value,
-                  style: const TextStyle(fontSize: 13),
-                ),
+                Text(value, style: const TextStyle(fontSize: 13)),
               ],
             ),
           ),
@@ -209,6 +224,8 @@ class _CheckOutPageState extends State<CheckOutPage> {
 
   @override
   Widget build(BuildContext context) {
+    final bool expiredStatus = isExpired();
+
     return Scaffold(
       backgroundColor: const Color(0xFFF4F6FA),
       appBar: AppBar(
@@ -249,6 +266,13 @@ class _CheckOutPageState extends State<CheckOutPage> {
                     ),
                     const SizedBox(height: 14),
                     infoBox(
+                      "Batas Waktu",
+                      "Maksimal hari ini pukul 23:59 WIB",
+                      Icons.timer_off,
+                      expiredStatus ? Colors.red : Colors.orange,
+                    ),
+                    const SizedBox(height: 12),
+                    infoBox(
                       "Lokasi Kantor",
                       "Pastikan anda sudah di kantor KPU Provinsi Kepri",
                       Icons.location_on,
@@ -257,12 +281,11 @@ class _CheckOutPageState extends State<CheckOutPage> {
                     const SizedBox(height: 12),
                     infoBox(
                       "Radius",
-                      "Maksimal radius 50m",
+                      "Maksimal radius 300m", // Sesuaikan dengan variabel radiusMeters (300)
                       Icons.my_location,
                       Colors.blue,
                     ),
                     const SizedBox(height: 16),
-
                     if (debugInfo.isNotEmpty)
                       infoBox(
                         "Debug Info",
@@ -270,7 +293,6 @@ class _CheckOutPageState extends State<CheckOutPage> {
                         Icons.info_outline,
                         Colors.deepPurple,
                       ),
-
                     if (selfiePreview != null) ...[
                       const SizedBox(height: 16),
                       const Text(
@@ -300,12 +322,14 @@ class _CheckOutPageState extends State<CheckOutPage> {
                 height: 54,
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF7A0C10),
+                    backgroundColor: expiredStatus
+                        ? Colors.grey
+                        : const Color(0xFF7A0C10),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(18),
                     ),
                   ),
-                  onPressed: _loading ? null : checkOut,
+                  onPressed: (_loading || expiredStatus) ? null : checkOut,
                   child: _loading
                       ? const SizedBox(
                           height: 24,
@@ -315,9 +339,11 @@ class _CheckOutPageState extends State<CheckOutPage> {
                             color: Colors.white,
                           ),
                         )
-                      : const Text(
-                          "✅ Absen Pulang Sekarang",
-                          style: TextStyle(
+                      : Text(
+                          expiredStatus
+                              ? "❌ Batas Waktu Terlewati"
+                              : "✅ Absen Pulang Sekarang",
+                          style: const TextStyle(
                             fontSize: 15,
                             fontWeight: FontWeight.bold,
                             color: Colors.white,
@@ -325,6 +351,15 @@ class _CheckOutPageState extends State<CheckOutPage> {
                         ),
                 ),
               ),
+              if (expiredStatus)
+                const Padding(
+                  padding: EdgeInsets.only(top: 12),
+                  child: Text(
+                    "Hari telah berganti. Anda tidak dapat melakukan absen pulang untuk tanggal sebelumnya.",
+                    style: TextStyle(color: Colors.red, fontSize: 12),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
             ],
           ),
         ),

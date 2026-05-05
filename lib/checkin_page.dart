@@ -27,12 +27,30 @@ class _CheckInPageState extends State<CheckInPage> {
   String debugInfo = "";
   File? selfiePreview;
 
+  // ✅ Fungsi Cek Terlambat (Batas 09.00)
+  bool isLate() {
+    final now = DateTime.now();
+    final deadline = DateTime(now.year, now.month, now.day, 9, 0); // Jam 09:00
+    return now.isAfter(deadline);
+  }
+
   String todayDocId() {
     final now = DateTime.now();
     return "${widget.nip}_${DateFormat("yyyyMMdd").format(now)}";
   }
 
   Future<void> checkIn() async {
+    // ✅ Validasi Waktu Sebelum Proses
+    if (isLate()) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("❌ Batas waktu absen masuk adalah jam 09.00 WIB."),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
     setState(() => _loading = true);
 
     try {
@@ -105,8 +123,9 @@ class _CheckInPageState extends State<CheckInPage> {
       final dateStr = DateFormat("yyyy-MM-dd").format(now);
       final docId = todayDocId();
 
-      final docRef =
-          FirebaseFirestore.instance.collection("attendance").doc(docId);
+      final docRef = FirebaseFirestore.instance
+          .collection("attendance")
+          .doc(docId);
 
       final snapshot = await docRef.get();
       if (snapshot.exists && snapshot.data()?["checkInTime"] != null) {
@@ -129,15 +148,15 @@ class _CheckInPageState extends State<CheckInPage> {
 
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("✅ Absen masuk berhasil")),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("✅ Absen masuk berhasil")));
 
       Navigator.pop(context);
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("❌ $e")),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text("❌ $e")));
     } finally {
       setState(() => _loading = false);
     }
@@ -171,10 +190,7 @@ class _CheckInPageState extends State<CheckInPage> {
                   ),
                 ),
                 const SizedBox(height: 6),
-                Text(
-                  value,
-                  style: const TextStyle(fontSize: 13),
-                ),
+                Text(value, style: const TextStyle(fontSize: 13)),
               ],
             ),
           ),
@@ -185,6 +201,9 @@ class _CheckInPageState extends State<CheckInPage> {
 
   @override
   Widget build(BuildContext context) {
+    // Cek status terlambat untuk UI
+    final bool lateStatus = isLate();
+
     return Scaffold(
       backgroundColor: const Color(0xFFF4F6FA),
       appBar: AppBar(
@@ -225,6 +244,13 @@ class _CheckInPageState extends State<CheckInPage> {
                     ),
                     const SizedBox(height: 14),
                     infoBox(
+                      "Batas Waktu",
+                      "Absen masuk maksimal jam 09.00 WIB",
+                      Icons.access_time_filled,
+                      lateStatus ? Colors.orange : Colors.green,
+                    ),
+                    const SizedBox(height: 12),
+                    infoBox(
                       "Lokasi Kantor",
                       "Pastikan anda sudah di kantor KPU Provinsi Kepri",
                       Icons.location_on,
@@ -233,12 +259,11 @@ class _CheckInPageState extends State<CheckInPage> {
                     const SizedBox(height: 12),
                     infoBox(
                       "Radius",
-                      "Maksimal radius 50m",
+                      "Maksimal radius 300m",
                       Icons.my_location,
                       Colors.blue,
                     ),
                     const SizedBox(height: 16),
-
                     if (debugInfo.isNotEmpty)
                       infoBox(
                         "Debug Info",
@@ -246,7 +271,6 @@ class _CheckInPageState extends State<CheckInPage> {
                         Icons.info_outline,
                         Colors.deepPurple,
                       ),
-
                     if (selfiePreview != null) ...[
                       const SizedBox(height: 16),
                       const Text(
@@ -276,12 +300,16 @@ class _CheckInPageState extends State<CheckInPage> {
                 height: 54,
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF7A0C10),
+                    // Tombol jadi abu-abu jika terlambat atau loading
+                    backgroundColor: lateStatus
+                        ? Colors.grey
+                        : const Color(0xFF7A0C10),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(18),
                     ),
                   ),
-                  onPressed: _loading ? null : checkIn,
+                  // Disable tombol jika terlambat
+                  onPressed: (_loading || lateStatus) ? null : checkIn,
                   child: _loading
                       ? const SizedBox(
                           height: 24,
@@ -291,9 +319,11 @@ class _CheckInPageState extends State<CheckInPage> {
                             color: Colors.white,
                           ),
                         )
-                      : const Text(
-                          "✅ Absen Masuk Sekarang",
-                          style: TextStyle(
+                      : Text(
+                          lateStatus
+                              ? "❌ Waktu Absen Berakhir"
+                              : "✅ Absen Masuk Sekarang",
+                          style: const TextStyle(
                             fontSize: 15,
                             fontWeight: FontWeight.bold,
                             color: Colors.white,
@@ -301,6 +331,16 @@ class _CheckInPageState extends State<CheckInPage> {
                         ),
                 ),
               ),
+
+              if (lateStatus)
+                const Padding(
+                  padding: EdgeInsets.only(top: 12),
+                  child: Text(
+                    "Sudah melewati jam 09.00. Hubungi Admin jika ada kendala.",
+                    style: TextStyle(color: Colors.red, fontSize: 12),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
             ],
           ),
         ),

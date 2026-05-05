@@ -8,20 +8,12 @@ import 'checkin_page.dart';
 import 'checkout_page.dart';
 import 'report_page.dart';
 import 'attendance_history_page.dart';
-import 'session_service.dart';
-import 'login_page.dart';
-
-
 
 class HomePage extends StatefulWidget {
   final String nip;
   final String name;
 
-  const HomePage({
-    super.key,
-    required this.nip,
-    required this.name,
-  });
+  const HomePage({super.key, required this.nip, required this.name});
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -41,8 +33,12 @@ class _HomePageState extends State<HomePage> {
   @override
   Widget build(BuildContext context) {
     final docId = todayDocId();
-    final attendanceRef =
-        FirebaseFirestore.instance.collection("attendance").doc(docId);
+    final attendanceRef = FirebaseFirestore.instance
+        .collection("attendance")
+        .doc(docId);
+    final userRef = FirebaseFirestore.instance
+        .collection("users")
+        .doc(widget.nip);
 
     return Scaffold(
       backgroundColor: const Color(0xFFF4F6FA),
@@ -62,14 +58,16 @@ class _HomePageState extends State<HomePage> {
 
             if (data["checkInTime"] != null) {
               sudahMasuk = true;
-              masukJam = DateFormat("HH:mm")
-                  .format(DateTime.parse(data["checkInTime"]));
+              masukJam = DateFormat(
+                "HH:mm",
+              ).format(DateTime.parse(data["checkInTime"]));
             }
 
             if (data["checkOutTime"] != null) {
               sudahPulang = true;
-              pulangJam = DateFormat("HH:mm")
-                  .format(DateTime.parse(data["checkOutTime"]));
+              pulangJam = DateFormat(
+                "HH:mm",
+              ).format(DateTime.parse(data["checkOutTime"]));
             }
 
             if (data["performanceReport"] != null) {
@@ -86,10 +84,9 @@ class _HomePageState extends State<HomePage> {
           return CustomScrollView(
             physics: const BouncingScrollPhysics(),
             slivers: [
-              /// ✅ HEADER MAROON (SliverAppBar)
               SliverAppBar(
                 pinned: true,
-                expandedHeight: 120,
+                expandedHeight: 150,
                 backgroundColor: const Color(0xFF7A0C10),
                 automaticallyImplyLeading: false,
                 flexibleSpace: FlexibleSpaceBar(
@@ -105,59 +102,69 @@ class _HomePageState extends State<HomePage> {
                               Text(
                                 widget.name.toUpperCase(),
                                 style: const TextStyle(
-                                  fontSize: 22,
+                                  fontSize: 20,
                                   fontWeight: FontWeight.bold,
                                   color: Colors.white,
                                 ),
                               ),
-                              const SizedBox(height: 6),
-                              Text(
-                                "NIP: ${widget.nip}",
-                                style: const TextStyle(
-                                  fontSize: 14,
-                                  color: Colors.white70,
-                                ),
+                              const SizedBox(height: 4),
+                              StreamBuilder<DocumentSnapshot>(
+                                stream: userRef.snapshots(),
+                                builder: (context, userSnap) {
+                                  String jabatan = "NIP: ${widget.nip}";
+                                  if (userSnap.hasData &&
+                                      userSnap.data!.exists) {
+                                    final userData =
+                                        userSnap.data!.data()
+                                            as Map<String, dynamic>;
+                                    String pos = userData["positions"] ?? "-";
+                                    jabatan = "$pos | NIP: ${widget.nip}";
+                                  }
+                                  return Text(
+                                    jabatan,
+                                    style: const TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w500,
+                                      color: Colors.white70,
+                                    ),
+                                  );
+                                },
                               ),
-                              const SizedBox(height: 10),
+                              const SizedBox(height: 8),
                               Text(
                                 todayLabel(),
                                 style: const TextStyle(
-                                  fontSize: 13,
-                                  color: Colors.white70,
+                                  fontSize: 12,
+                                  color: Colors.white54,
                                 ),
                               ),
                             ],
                           ),
                         ),
                         IconButton(
-  onPressed: () async {
-    await SessionService.clearSession();
-
-    if (!mounted) return;
-
-    Navigator.pushAndRemoveUntil(
-      context,
-      MaterialPageRoute(builder: (_) => const LoginPage()),
-      (route) => false,
-    );
-  },
-  icon: const Icon(Icons.logout, color: Colors.white),
-),
-
-
+                          onPressed: () async {
+                            await SessionService.clearSession();
+                            if (!mounted) return;
+                            Navigator.pushAndRemoveUntil(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const LoginPage(),
+                              ),
+                              (route) => false,
+                            );
+                          },
+                          icon: const Icon(Icons.logout, color: Colors.white),
+                        ),
                       ],
                     ),
                   ),
                 ),
               ),
-
-              /// ✅ BODY CONTENT
               SliverToBoxAdapter(
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(16, 16, 16, 30),
                   child: Column(
                     children: [
-                      /// ✅ STATUS CARD
                       _premiumCard(
                         child: Padding(
                           padding: const EdgeInsets.all(14),
@@ -212,10 +219,7 @@ class _HomePageState extends State<HomePage> {
                           ),
                         ),
                       ),
-
                       const SizedBox(height: 16),
-
-                      /// ✅ MENU UTAMA (2+1 layout responsive)
                       _premiumCard(
                         child: Padding(
                           padding: const EdgeInsets.all(16),
@@ -230,7 +234,6 @@ class _HomePageState extends State<HomePage> {
                                 ),
                               ),
                               const SizedBox(height: 16),
-
                               Row(
                                 children: [
                                   Expanded(
@@ -270,17 +273,15 @@ class _HomePageState extends State<HomePage> {
                                   ),
                                 ],
                               ),
-
                               const SizedBox(height: 12),
-
                               PremiumMenuButtonWide(
                                 icon: Icons.assignment,
                                 label: "Laporan Kinerja",
                                 subtitle: sudahReport
                                     ? "Sudah dikirim ✅"
                                     : (sudahPulang
-                                        ? "Isi laporan hari ini"
-                                        : "Isi setelah pulang"),
+                                          ? "Isi laporan hari ini"
+                                          : "Isi setelah pulang"),
                                 enabled: sudahPulang && !sudahReport,
                                 onTap: () {
                                   HapticFeedback.lightImpact();
@@ -295,119 +296,38 @@ class _HomePageState extends State<HomePage> {
                                   );
                                 },
                               ),
-
-                              const SizedBox(height: 14),
-
-                              if (sudahMasuk && sudahPulang)
-                                const Center(
-                                  child: Text(
-                                    "Anda sudah absen hari ini ✅",
-                                    style: TextStyle(
-                                      color: Colors.green,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ),
                             ],
                           ),
                         ),
                       ),
-
-const SizedBox(height: 16),
-
-                      // ===== MENU TAMBAHAN =====
-Container(
-  width: double.infinity,
-  padding: const EdgeInsets.all(16),
-  decoration: BoxDecoration(
-    color: Colors.white,
-    borderRadius: BorderRadius.circular(18),
-    boxShadow: [
-      BoxShadow(
-        color: Colors.black.withOpacity(0.05),
-        blurRadius: 10,
-        offset: const Offset(0, 5),
-      ),
-    ],
-  ),
-  child: Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      const Text(
-        "Menu Tambahan",
-        style: TextStyle(
-          fontSize: 16,
-          fontWeight: FontWeight.bold,
-        ),
-      ),
-      const SizedBox(height: 14),
-
-      _menuWideButton(
-        icon: Icons.history,
-        label: "Riwayat Absensi",
-        onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => AttendanceHistoryPage(
-      nip: widget.nip,
-      name: widget.name,
-    ),
-            ),
-          );
-        },
-      ),
-    ],
-  ),
-),
-
                       const SizedBox(height: 16),
-
-                      /// ✅ INFO KANTOR
-                      _premiumCard(
-                        child: Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: const [
-                              Text(
-                                "Informasi Kantor",
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                ),
+                      _menuWideButton(
+                        icon: Icons.history,
+                        label: "Riwayat Absensi",
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => AttendanceHistoryPage(
+                                nip: widget.nip,
+                                name: widget.name,
                               ),
-                              SizedBox(height: 12),
-                              Row(
-                                children: [
-                                  Icon(Icons.location_on, color: Colors.red),
-                                  SizedBox(width: 8),
-                                  Expanded(
-                                    child: Text(
-                                      "KPU PROVINSI KEPRI",
-                                      style: TextStyle(fontSize: 14),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              SizedBox(height: 10),
-                              Row(
-                                children: [
-                                  Icon(Icons.access_time, color: Colors.blue),
-                                  SizedBox(width: 8),
-                                  Text("Jam kerja: 08:00 - 16:00"),
-                                ],
-                              ),
-                            ],
-                          ),
+                            ),
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 20),
+                      const Text(
+                        "KPU PROVINSI KEPRI",
+                        style: TextStyle(
+                          color: Colors.black54,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
                         ),
                       ),
-
-                      const SizedBox(height: 20),
-
                       const Text(
                         "BONDANCH@2026",
-                        style: TextStyle(color: Colors.black54, fontSize: 12),
+                        style: TextStyle(color: Colors.black54, fontSize: 10),
                       ),
                     ],
                   ),
@@ -495,8 +415,9 @@ Container(
 }
 
 // ======================================================
-// Premium Menu Button (square)
+// ✅ BAGIAN YANG MUNGKIN TADI TERHAPUS (Class PremiumMenuButton)
 // ======================================================
+
 class PremiumMenuButton extends StatelessWidget {
   final IconData icon;
   final String label;
@@ -514,7 +435,6 @@ class PremiumMenuButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final Color bg = enabled ? const Color(0xFF1565C0) : Colors.grey.shade400;
-
     return Material(
       color: bg,
       borderRadius: BorderRadius.circular(18),
@@ -540,7 +460,7 @@ class PremiumMenuButton extends StatelessWidget {
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 13,
-                    fontWeight: FontWeight.w600,
+                    fontWeight: FontWeight.bold,
                   ),
                 ),
               ],
@@ -552,9 +472,6 @@ class PremiumMenuButton extends StatelessWidget {
   }
 }
 
-// ======================================================
-// Premium Menu Button Wide
-// ======================================================
 class PremiumMenuButtonWide extends StatelessWidget {
   final IconData icon;
   final String label;
@@ -574,7 +491,6 @@ class PremiumMenuButtonWide extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final Color bg = enabled ? const Color(0xFF1565C0) : Colors.grey.shade400;
-
     return Material(
       color: bg,
       borderRadius: BorderRadius.circular(18),
@@ -662,4 +578,3 @@ Widget _menuWideButton({
     ),
   );
 }
-
