@@ -27,6 +27,19 @@ class _CheckOutPageState extends State<CheckOutPage> {
   String debugInfo = "";
   File? selfiePreview;
 
+  // ✅ Fungsi Cek Belum Waktunya (Sebelum 15.00)
+  bool isTooEarly() {
+    final now = DateTime.now();
+    final startTime = DateTime(
+      now.year,
+      now.month,
+      now.day,
+      15,
+      0,
+    ); // Jam 15:00
+    return now.isBefore(startTime);
+  }
+
   // ✅ Fungsi Cek Batas Waktu (23.59)
   bool isExpired() {
     final now = DateTime.now();
@@ -41,7 +54,20 @@ class _CheckOutPageState extends State<CheckOutPage> {
   }
 
   Future<void> checkOut() async {
-    // ✅ Validasi Batas Waktu
+    // ✅ Validasi Waktu Mulai Absen Pulang
+    if (isTooEarly()) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            "⏳ Belum waktunya pulang. Absen pulang dimulai jam 15.00 WIB.",
+          ),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    // ✅ Validasi Batas Akhir Waktu
     if (isExpired()) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -224,7 +250,10 @@ class _CheckOutPageState extends State<CheckOutPage> {
 
   @override
   Widget build(BuildContext context) {
+    // Cek status waktu untuk UI
+    final bool earlyStatus = isTooEarly();
     final bool expiredStatus = isExpired();
+    final bool cannotAbsen = earlyStatus || expiredStatus;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF4F6FA),
@@ -266,10 +295,10 @@ class _CheckOutPageState extends State<CheckOutPage> {
                     ),
                     const SizedBox(height: 14),
                     infoBox(
-                      "Batas Waktu",
-                      "Maksimal hari ini pukul 23:59 WIB",
-                      Icons.timer_off,
-                      expiredStatus ? Colors.red : Colors.orange,
+                      "Waktu Absen",
+                      "Mulai jam 15.00 s/d 23.59 WIB",
+                      Icons.access_time_filled,
+                      cannotAbsen ? Colors.orange : Colors.green,
                     ),
                     const SizedBox(height: 12),
                     infoBox(
@@ -322,14 +351,16 @@ class _CheckOutPageState extends State<CheckOutPage> {
                 height: 54,
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: expiredStatus
+                    // Tombol jadi abu-abu jika belum waktunya atau sudah lewat
+                    backgroundColor: cannotAbsen
                         ? Colors.grey
                         : const Color(0xFF7A0C10),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(18),
                     ),
                   ),
-                  onPressed: (_loading || expiredStatus) ? null : checkOut,
+                  // Disable tombol jika tidak bisa absen
+                  onPressed: (_loading || cannotAbsen) ? null : checkOut,
                   child: _loading
                       ? const SizedBox(
                           height: 24,
@@ -340,7 +371,9 @@ class _CheckOutPageState extends State<CheckOutPage> {
                           ),
                         )
                       : Text(
-                          expiredStatus
+                          earlyStatus
+                              ? "⏳ Belum Waktu Pulang"
+                              : expiredStatus
                               ? "❌ Batas Waktu Terlewati"
                               : "✅ Absen Pulang Sekarang",
                           style: const TextStyle(
@@ -351,6 +384,21 @@ class _CheckOutPageState extends State<CheckOutPage> {
                         ),
                 ),
               ),
+
+              if (earlyStatus)
+                const Padding(
+                  padding: EdgeInsets.only(top: 12),
+                  child: Text(
+                    "Absen pulang baru bisa dilakukan mulai pukul 15.00 WIB.",
+                    style: TextStyle(
+                      color: Colors.orange,
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+
               if (expiredStatus)
                 const Padding(
                   padding: EdgeInsets.only(top: 12),
