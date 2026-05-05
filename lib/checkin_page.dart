@@ -27,6 +27,13 @@ class _CheckInPageState extends State<CheckInPage> {
   String debugInfo = "";
   File? selfiePreview;
 
+  // ✅ Fungsi Cek Belum Waktunya (Sebelum 06.00)
+  bool isTooEarly() {
+    final now = DateTime.now();
+    final startTime = DateTime(now.year, now.month, now.day, 6, 0); // Jam 06:00
+    return now.isBefore(startTime);
+  }
+
   // ✅ Fungsi Cek Terlambat (Batas 09.00)
   bool isLate() {
     final now = DateTime.now();
@@ -41,6 +48,16 @@ class _CheckInPageState extends State<CheckInPage> {
 
   Future<void> checkIn() async {
     // ✅ Validasi Waktu Sebelum Proses
+    if (isTooEarly()) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("⏳ Belum waktunya absen. Absen dimulai jam 06.00 WIB."),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
     if (isLate()) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -201,8 +218,10 @@ class _CheckInPageState extends State<CheckInPage> {
 
   @override
   Widget build(BuildContext context) {
-    // Cek status terlambat untuk UI
+    // Cek status waktu untuk UI
+    final bool earlyStatus = isTooEarly();
     final bool lateStatus = isLate();
+    final bool cannotAbsen = earlyStatus || lateStatus;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF4F6FA),
@@ -244,10 +263,10 @@ class _CheckInPageState extends State<CheckInPage> {
                     ),
                     const SizedBox(height: 14),
                     infoBox(
-                      "Batas Waktu",
-                      "Absen masuk maksimal jam 09.00 WIB",
+                      "Waktu Absen",
+                      "Mulai jam 06.00 s/d 09.00 WIB",
                       Icons.access_time_filled,
-                      lateStatus ? Colors.orange : Colors.green,
+                      cannotAbsen ? Colors.orange : Colors.green,
                     ),
                     const SizedBox(height: 12),
                     infoBox(
@@ -300,16 +319,16 @@ class _CheckInPageState extends State<CheckInPage> {
                 height: 54,
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                    // Tombol jadi abu-abu jika terlambat atau loading
-                    backgroundColor: lateStatus
+                    // Tombol jadi abu-abu jika belum waktunya atau terlambat
+                    backgroundColor: cannotAbsen
                         ? Colors.grey
                         : const Color(0xFF7A0C10),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(18),
                     ),
                   ),
-                  // Disable tombol jika terlambat
-                  onPressed: (_loading || lateStatus) ? null : checkIn,
+                  // Disable tombol jika tidak bisa absen
+                  onPressed: (_loading || cannotAbsen) ? null : checkIn,
                   child: _loading
                       ? const SizedBox(
                           height: 24,
@@ -320,7 +339,9 @@ class _CheckInPageState extends State<CheckInPage> {
                           ),
                         )
                       : Text(
-                          lateStatus
+                          earlyStatus
+                              ? "⏳ Belum Waktu Absen"
+                              : lateStatus
                               ? "❌ Waktu Absen Berakhir"
                               : "✅ Absen Masuk Sekarang",
                           style: const TextStyle(
@@ -331,6 +352,20 @@ class _CheckInPageState extends State<CheckInPage> {
                         ),
                 ),
               ),
+
+              if (earlyStatus)
+                const Padding(
+                  padding: EdgeInsets.only(top: 12),
+                  child: Text(
+                    "Absen masuk baru bisa dilakukan mulai pukul 06.00 WIB.",
+                    style: TextStyle(
+                      color: Colors.orange,
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
 
               if (lateStatus)
                 const Padding(
