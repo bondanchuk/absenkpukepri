@@ -1,9 +1,10 @@
-import 'dart:async'; // ✅ Tambahan untuk fitur Jam Real-time
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter/services.dart';
-import 'session_service.dart';
+import 'package:shared_preferences/shared_preferences.dart'; // ✅ Pastikan SharedPreferences diimport
+
 import 'login_page.dart';
 import 'checkin_page.dart';
 import 'checkout_page.dart';
@@ -21,14 +22,12 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  // ✅ Variabel untuk Jam Real-time
   Timer? _timer;
   String _currentTime = "";
 
   @override
   void initState() {
     super.initState();
-    // Mengaktifkan Jam Real-time saat halaman dibuka
     _currentTime = DateFormat('HH:mm:ss').format(DateTime.now());
     _timer = Timer.periodic(
       const Duration(seconds: 1),
@@ -46,12 +45,65 @@ class _HomePageState extends State<HomePage> {
 
   @override
   void dispose() {
-    _timer
-        ?.cancel(); // Mematikan timer saat halaman ditutup agar tidak memory leak
+    _timer?.cancel();
     super.dispose();
   }
 
-  // ✅ Fungsi untuk Sapaan Dinamis
+  // ✅ FUNGSI UNTUK MENAMPILKAN DIALOG KONFIRMASI LOGOUT
+  void _showLogoutDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+          ),
+          title: const Text(
+            "Konfirmasi Logout",
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF7A0C10),
+            ),
+          ),
+          content: const Text("Apakah Anda yakin ingin keluar dari aplikasi?"),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context), // Tutup dialog
+              child: const Text("Batal", style: TextStyle(color: Colors.grey)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF7A0C10),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              onPressed: () async {
+                // ✅ Hapus Sesi
+                final prefs = await SharedPreferences.getInstance();
+                await prefs
+                    .clear(); // Menghapus NIP dan Nama agar Auto-Login mati
+
+                if (!mounted) return;
+
+                // ✅ Pindah ke Login Page
+                Navigator.pushAndRemoveUntil(
+                  context,
+                  MaterialPageRoute(builder: (_) => const LoginPage()),
+                  (route) => false,
+                );
+              },
+              child: const Text(
+                "Keluar",
+                style: TextStyle(color: Colors.white),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   String getGreeting() {
     var hour = DateTime.now().hour;
     if (hour < 11) return "Selamat Pagi,";
@@ -95,21 +147,18 @@ class _HomePageState extends State<HomePage> {
 
           if (snapshot.hasData && snapshot.data!.exists) {
             final data = snapshot.data!.data() as Map<String, dynamic>;
-
             if (data["checkInTime"] != null) {
               sudahMasuk = true;
               masukJam = DateFormat(
                 "HH:mm",
               ).format(DateTime.parse(data["checkInTime"]));
             }
-
             if (data["checkOutTime"] != null) {
               sudahPulang = true;
               pulangJam = DateFormat(
                 "HH:mm",
               ).format(DateTime.parse(data["checkOutTime"]));
             }
-
             if (data["performanceReport"] != null) {
               sudahReport = true;
               reportStatus = "Sudah diisi ✅";
@@ -124,11 +173,9 @@ class _HomePageState extends State<HomePage> {
           return CustomScrollView(
             physics: const BouncingScrollPhysics(),
             slivers: [
-              // ✅ HEADER MAROON
               SliverAppBar(
                 pinned: true,
-                expandedHeight:
-                    140, // ✅ Sedikit dinaikkan untuk menampung Jam Real-time
+                expandedHeight: 140,
                 backgroundColor: const Color(0xFF7A0C10),
                 automaticallyImplyLeading: false,
                 flexibleSpace: FlexibleSpaceBar(
@@ -141,7 +188,6 @@ class _HomePageState extends State<HomePage> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              // ✅ SAPAAN PAGI/SIANG/MALAM
                               Text(
                                 getGreeting(),
                                 style: const TextStyle(
@@ -186,7 +232,6 @@ class _HomePageState extends State<HomePage> {
                                 },
                               ),
                               const SizedBox(height: 8),
-                              // ✅ TANGGAL DAN JAM BERDETAK
                               Row(
                                 children: [
                                   Text(
@@ -221,18 +266,9 @@ class _HomePageState extends State<HomePage> {
                             ],
                           ),
                         ),
+                        // ✅ TOMBOL LOGOUT SEKARANG MEMANGGIL DIALOG
                         IconButton(
-                          onPressed: () async {
-                            await SessionService.clearSession();
-                            if (!mounted) return;
-                            Navigator.pushAndRemoveUntil(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => const LoginPage(),
-                              ),
-                              (route) => false,
-                            );
-                          },
+                          onPressed: () => _showLogoutDialog(context),
                           icon: const Icon(Icons.logout, color: Colors.white),
                         ),
                       ],
@@ -241,13 +277,11 @@ class _HomePageState extends State<HomePage> {
                 ),
               ),
 
-              // ✅ BODY CONTENT
               SliverToBoxAdapter(
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(16, 16, 16, 30),
                   child: Column(
                     children: [
-                      // ✅ STATUS CARD
                       _premiumCard(
                         child: Padding(
                           padding: const EdgeInsets.all(14),
@@ -266,9 +300,9 @@ class _HomePageState extends State<HomePage> {
                                 children: [
                                   Expanded(
                                     child: _statusTile(
-                                      title: "Masuk", // ✅ Teks Dipendekkan
+                                      title: "Masuk",
                                       subtitle: sudahMasuk
-                                          ? masukJam // ✅ Jam Saja agar muat
+                                          ? masukJam
                                           : "Belum absen",
                                       icon: Icons.login,
                                       active: sudahMasuk,
@@ -278,9 +312,9 @@ class _HomePageState extends State<HomePage> {
                                   const SizedBox(width: 10),
                                   Expanded(
                                     child: _statusTile(
-                                      title: "Pulang", // ✅ Teks Dipendekkan
+                                      title: "Pulang",
                                       subtitle: sudahPulang
-                                          ? pulangJam // ✅ Jam Saja agar muat
+                                          ? pulangJam
                                           : "Belum absen",
                                       icon: Icons.logout,
                                       active: sudahPulang,
@@ -304,7 +338,6 @@ class _HomePageState extends State<HomePage> {
                       ),
                       const SizedBox(height: 16),
 
-                      // ✅ MENU UTAMA
                       _premiumCard(
                         child: Padding(
                           padding: const EdgeInsets.all(16),
@@ -387,7 +420,6 @@ class _HomePageState extends State<HomePage> {
                       ),
                       const SizedBox(height: 16),
 
-                      // ✅ RIWAYAT ABSENSI
                       _menuWideButton(
                         icon: Icons.history,
                         label: "Riwayat Absensi",
@@ -445,7 +477,6 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  // ✅ Ikon (X) tetap dihapus, ukuran Font disesuaikan
   Widget _statusTile({
     required String title,
     required String subtitle,
@@ -507,9 +538,7 @@ class _HomePageState extends State<HomePage> {
   }
 }
 
-// ======================================================
-// Premium Menu Button (square)
-// ======================================================
+// Komponen Pendukung
 class PremiumMenuButton extends StatelessWidget {
   final IconData icon;
   final String label;
@@ -564,9 +593,6 @@ class PremiumMenuButton extends StatelessWidget {
   }
 }
 
-// ======================================================
-// Premium Menu Button Wide
-// ======================================================
 class PremiumMenuButtonWide extends StatelessWidget {
   final IconData icon;
   final String label;
