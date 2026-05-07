@@ -10,11 +10,9 @@ import 'home_page.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
-  // ✅ INI FIX UTAMA
+  // Inisialisasi format tanggal Indonesia
   await initializeDateFormatting('id_ID', null);
 
   runApp(const MyApp());
@@ -23,15 +21,18 @@ void main() async {
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
+  // ✅ Fungsi untuk menentukan halaman awal (Login atau Home)
   Future<Widget> _getStartPage() async {
     final prefs = await SharedPreferences.getInstance();
     final nip = prefs.getString("nip");
     final name = prefs.getString("name");
 
+    // Jika data NIP dan Nama ada di memori HP, langsung ke Home
     if (nip != null && name != null) {
       return HomePage(nip: nip, name: name);
     }
 
+    // Jika tidak ada, arahkan ke Login
     return const LoginPage();
   }
 
@@ -39,20 +40,22 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: "Absensi KP UKEPRI",
+      title: "ABSENSI KPU KEPRI", // ✅ Perbaikan Typo
       theme: ThemeData(
         primaryColor: const Color(0xFF7A0C10),
         fontFamily: "Poppins",
       ),
-      home: FutureBuilder(
+      home: FutureBuilder<Widget>(
         future: _getStartPage(),
         builder: (context, snapshot) {
-          if (!snapshot.hasData) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
             return const Scaffold(
-              body: Center(child: CircularProgressIndicator()),
+              body: Center(
+                child: CircularProgressIndicator(color: Color(0xFF7A0C10)),
+              ),
             );
           }
-          return snapshot.data!;
+          return snapshot.data ?? const LoginPage();
         },
       ),
     );
