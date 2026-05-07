@@ -35,7 +35,7 @@ class _CheckOutPageState extends State<CheckOutPage> {
     _fetchActiveAttendance();
   }
 
-  // ✅ MENCARI DATA ABSEN MASUK YANG BELUM PULANG
+  // ✅ LOGIKA BARU: Jika belum absen masuk, tetap set _activeDocId untuk hari ini
   Future<void> _fetchActiveAttendance() async {
     try {
       final now = DateTime.now();
@@ -43,24 +43,33 @@ class _CheckOutPageState extends State<CheckOutPage> {
       final yesterdayId =
           "${widget.nip}_${DateFormat("yyyyMMdd").format(now.subtract(const Duration(days: 1)))}";
 
-      // Cek doc hari ini
-      var doc = await FirebaseFirestore.instance
+      var todayDoc = await FirebaseFirestore.instance
           .collection("attendance")
           .doc(todayId)
           .get();
-      if (doc.exists && doc.data()?['checkOutTime'] == null) {
+      var yesterdayDoc = await FirebaseFirestore.instance
+          .collection("attendance")
+          .doc(yesterdayId)
+          .get();
+
+      if (todayDoc.exists && todayDoc.data()?['checkOutTime'] == null) {
+        // Sudah absen masuk hari ini, belum pulang
         _activeDocId = todayId;
-        _attendanceData = doc.data();
+        _attendanceData = todayDoc.data();
+      } else if (yesterdayDoc.exists &&
+          yesterdayDoc.data()?['checkOutTime'] == null &&
+          yesterdayDoc.data()?['shift'] == 'Shift 3') {
+        // Shift 3 kemarin malam, belum pulang
+        _activeDocId = yesterdayId;
+        _attendanceData = yesterdayDoc.data();
+      } else if (todayDoc.exists && todayDoc.data()?['checkOutTime'] != null) {
+        // Sudah pulang hari ini
+        _activeDocId = null;
       } else {
-        // Cek doc kemarin (Khusus Security Shift 3 yang pulangnya pagi)
-        doc = await FirebaseFirestore.instance
-            .collection("attendance")
-            .doc(yesterdayId)
-            .get();
-        if (doc.exists && doc.data()?['checkOutTime'] == null) {
-          _activeDocId = yesterdayId;
-          _attendanceData = doc.data();
-        }
+        // BELUM ABSEN MASUK SAMA SEKALI
+        // Tetap izinkan untuk absen pulang (Dokumen akan dibuat saat disubmit)
+        _activeDocId = todayId;
+        _attendanceData = null;
       }
     } catch (e) {
       debugPrint("Error: $e");
@@ -69,33 +78,27 @@ class _CheckOutPageState extends State<CheckOutPage> {
     }
   }
 
-  // ✅ WAKTU MINIMAL BOLEH PULANG (DINAMIS DARI SHIFT)
+  // ✅ WAKTU MINIMAL BOLEH PULANG
   bool isTooEarly() {
     final now = DateTime.now();
+    // Jika _attendanceData null, otomatis dianggap Non-Shift (Bukan Security)
     final shift = _attendanceData?['shift'] ?? "Non-Shift";
 
     if (shift == "Shift 1")
-      return now.isBefore(
-        DateTime(now.year, now.month, now.day, 15, 0),
-      ); // Pulang jam 15.00
+      return now.isBefore(DateTime(now.year, now.month, now.day, 15, 0));
     if (shift == "Shift 2")
-      return now.isBefore(
-        DateTime(now.year, now.month, now.day, 23, 0),
-      ); // Pulang jam 23.00
-    if (shift == "Shift 3")
-      return now.hour < 7; // Pulang keesokan harinya jam 07.00 pagi
+      return now.isBefore(DateTime(now.year, now.month, now.day, 23, 0));
+    if (shift == "Shift 3") return now.hour < 7;
 
-    // Pegawai Biasa
-    return now.isBefore(
-      DateTime(now.year, now.month, now.day, 15, 0),
-    ); // Pulang jam 15.00
+    // Pegawai Biasa (Non-Shift) atau belum absen masuk -> Boleh pulang mulai jam 15.00
+    return now.isBefore(DateTime(now.year, now.month, now.day, 15, 0));
   }
 
   Future<void> checkOut() async {
     if (_activeDocId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text("❌ Data absen masuk tidak ditemukan/Sudah pulang."),
+          content: Text("❌ Anda sudah absen pulang hari ini."),
           backgroundColor: Colors.red,
         ),
       );
@@ -129,8 +132,13 @@ class _CheckOutPageState extends State<CheckOutPage> {
       if (pos.accuracy > 25) throw Exception("Akurasi GPS terlalu buruk.");
       if (pos.isMocked) throw Exception("Fake GPS terdeteksi.");
 
-      // Cek apakah mode WFH (Ditarik dari data absen masuk)
+      // Cek mode WFH: Jika belum absen masuk & hari ini Jumat, otomatis bebas radius
       bool isWfh = _attendanceData?['workMode'] == "WFH";
+      bool isFriday = DateTime.now().weekday == DateTime.friday;
+      if (_attendanceData == null && isFriday) {
+        isWfh = true;
+      }
+
       if (!isWfh && dist > radiusMeters) {
         throw Exception(
           "Di luar area kantor.\nJarak: ${dist.toStringAsFixed(1)} m",
@@ -152,14 +160,21 @@ class _CheckOutPageState extends State<CheckOutPage> {
       if (compressed == null) throw Exception("Gagal compress foto.");
 
       final selfieUrl = await CloudinaryService.uploadImage(compressed);
+      final now = DateTime.now();
 
+      // ✅ Gunakan SetOptions(merge: true) agar jika dokumen belum ada (tidak absen masuk),
+      // Firebase akan otomatis membuatnya, lengkap dengan NIP dan Date.
       await docRef.set({
-        "checkOutTime": DateTime.now().toIso8601String(),
+        "nip": widget.nip,
+        "date": DateFormat("yyyy-MM-dd").format(now),
+        "checkOutTime": now.toIso8601String(),
         "checkOutLat": pos.latitude,
         "checkOutLng": pos.longitude,
         "distanceOut": dist,
         "checkOutSelfieUrl": selfieUrl,
         "updatedAt": FieldValue.serverTimestamp(),
+        "workMode": isWfh ? "WFH" : "WFO",
+        "shift": _attendanceData?['shift'] ?? "Non-Shift",
       }, SetOptions(merge: true));
 
       if (!mounted) return;
@@ -230,7 +245,7 @@ class _CheckOutPageState extends State<CheckOutPage> {
       );
     }
 
-    final bool earlyStatus = _attendanceData != null && isTooEarly();
+    final bool earlyStatus = isTooEarly();
 
     return Scaffold(
       backgroundColor: const Color(0xFFF4F6FA),
@@ -254,7 +269,7 @@ class _CheckOutPageState extends State<CheckOutPage> {
                 children: [
                   Text(
                     _attendanceData == null
-                        ? "Status Absen"
+                        ? "Status: Tidak ada Absen Masuk"
                         : "Jadwal: ${_attendanceData!['shift']}",
                     style: const TextStyle(
                       fontSize: 16,
@@ -262,12 +277,18 @@ class _CheckOutPageState extends State<CheckOutPage> {
                       color: Color(0xFF7A0C10),
                     ),
                   ),
+                  if (_attendanceData == null)
+                    const Padding(
+                      padding: EdgeInsets.only(top: 6),
+                      child: Text(
+                        "Anda bisa langsung absen pulang meskipun belum absen masuk hari ini.",
+                        style: TextStyle(color: Colors.orange, fontSize: 12),
+                      ),
+                    ),
                   const SizedBox(height: 14),
                   infoBox(
                     "Waktu Absen Pulang",
-                    _attendanceData == null
-                        ? "Belum ada data masuk"
-                        : getTimeInfoText(),
+                    getTimeInfoText(),
                     Icons.access_time_filled,
                     earlyStatus ? Colors.orange : Colors.green,
                   ),
@@ -305,14 +326,14 @@ class _CheckOutPageState extends State<CheckOutPage> {
               height: 54,
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: (earlyStatus || _attendanceData == null)
+                  backgroundColor: (_activeDocId == null || earlyStatus)
                       ? Colors.grey
                       : const Color(0xFF7A0C10),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(18),
                   ),
                 ),
-                onPressed: (_loading || earlyStatus || _attendanceData == null)
+                onPressed: (_loading || _activeDocId == null || earlyStatus)
                     ? null
                     : checkOut,
                 child: _loading

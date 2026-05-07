@@ -16,6 +16,8 @@ class _ReportPageState extends State<ReportPage> {
   final _formKey = GlobalKey<FormState>();
   bool _loading = false;
 
+  bool _hasCheckedOut = false; // Status apakah sudah absen pulang
+
   final TextEditingController tasksController = TextEditingController();
   final TextEditingController notesController = TextEditingController();
 
@@ -25,15 +27,20 @@ class _ReportPageState extends State<ReportPage> {
     loadExistingReport();
   }
 
-  // ✅ Fungsi Cek Batas Waktu (23.59)
+  // ✅ Fungsi Cek Batas Waktu Akhir (23.59)
   bool isExpired() {
     final now = DateTime.now();
-    // Batas pengisian adalah pukul 23:59:59 pada hari yang sama
     final deadline = DateTime(now.year, now.month, now.day, 23, 59, 59);
     return now.isAfter(deadline);
   }
 
-  /// ✅ load report jika sudah pernah isi
+  // ✅ Fungsi Cek Belum Waktunya (Boleh jika sudah pulang ATAU sudah jam 17.00)
+  bool isTooEarly() {
+    if (_hasCheckedOut) return false; // Sudah pulang = Bebas isi
+    final now = DateTime.now();
+    return now.hour < 17; // Jika belum pulang, harus lewat jam 17.00
+  }
+
   Future<void> loadExistingReport() async {
     final docRef = FirebaseFirestore.instance
         .collection("attendance")
@@ -42,29 +49,42 @@ class _ReportPageState extends State<ReportPage> {
 
     if (snapshot.exists) {
       final data = snapshot.data()!;
-      if (data["performanceReport"] != null) {
-        final report = data["performanceReport"];
-        tasksController.text = report["tasks"] ?? "";
-        notesController.text = report["notes"] ?? "";
+      if (data['checkOutTime'] != null) {
+        setState(() => _hasCheckedOut = true);
+      }
+      if (data['performanceReport'] != null) {
+        final report = data['performanceReport'] as Map<String, dynamic>;
+        setState(() {
+          tasksController.text = report['tasks'] ?? "";
+          notesController.text = report['notes'] ?? "";
+        });
       }
     }
   }
 
   Future<void> submitReport() async {
-    // ✅ Validasi Batas Waktu
-    if (isExpired()) {
+    if (!_formKey.currentState!.validate()) return;
+
+    if (isTooEarly()) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-            "❌ Batas waktu pengisian laporan hari ini telah berakhir.",
+            "⏳ Anda belum absen pulang atau belum melewati jam 17.00 WIB",
           ),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+    if (isExpired()) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("❌ Batas waktu pengisian laporan telah berakhir"),
           backgroundColor: Colors.red,
         ),
       );
       return;
     }
-
-    if (!_formKey.currentState!.validate()) return;
 
     setState(() => _loading = true);
 
@@ -72,326 +92,256 @@ class _ReportPageState extends State<ReportPage> {
       final docRef = FirebaseFirestore.instance
           .collection("attendance")
           .doc(widget.docId);
+      final now = DateTime.now();
 
       await docRef.set({
+        "nip": widget.nip,
+        "date": DateFormat("yyyy-MM-dd").format(now),
         "performanceReport": {
           "tasks": tasksController.text.trim(),
           "notes": notesController.text.trim(),
-          "createdAt": FieldValue.serverTimestamp(),
+          "submittedAt": now.toIso8601String(),
         },
-        "reportSubmitted": true,
         "updatedAt": FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
 
       if (!mounted) return;
-
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("✅ Laporan berhasil dikirim")),
+        const SnackBar(content: Text("✅ Laporan berhasil dikirim!")),
       );
-
       Navigator.pop(context);
     } catch (e) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text("❌ Error: $e")));
+      ).showSnackBar(SnackBar(content: Text("❌ Gagal mengirim laporan: $e")));
     } finally {
       setState(() => _loading = false);
     }
   }
 
   @override
-  void dispose() {
-    tasksController.dispose();
-    notesController.dispose();
-    super.dispose();
-  }
-
-  Widget _header(String dateLabel) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(20, 55, 20, 20),
-      width: double.infinity,
-      decoration: const BoxDecoration(
-        color: Color(0xFF7A0C10),
-        borderRadius: BorderRadius.vertical(bottom: Radius.circular(28)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            "Laporan Kinerja",
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            dateLabel,
-            style: const TextStyle(fontSize: 13, color: Colors.white70),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _card({required Widget child}) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 5),
-          ),
-        ],
-      ),
-      child: child,
-    );
-  }
-
-  InputDecoration _inputDecoration(String label, String hint) {
-    return InputDecoration(
-      labelText: label,
-      hintText: hint,
-      filled: true,
-      fillColor: const Color(0xFFF8FAFD),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(16),
-        borderSide: BorderSide(color: Colors.grey.shade300),
-      ),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(16),
-        borderSide: BorderSide(color: Colors.grey.shade300),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(16),
-        borderSide: const BorderSide(color: Color(0xFF7A0C10), width: 1.5),
-      ),
-    );
-  }
-
-  @override
   Widget build(BuildContext context) {
     final bool expiredStatus = isExpired();
-    final dateLabel = DateFormat(
-      "EEEE, dd MMMM yyyy",
-      "id_ID",
-    ).format(DateTime.now());
-
-    final attendanceRef = FirebaseFirestore.instance
-        .collection("attendance")
-        .doc(widget.docId);
+    final bool earlyStatus = isTooEarly();
+    final bool cannotSubmit = expiredStatus || earlyStatus;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF4F6FA),
-      body: Column(
+      appBar: AppBar(
+        title: const Text(
+          "Laporan Kinerja",
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        backgroundColor: const Color(0xFF7A0C10),
+        foregroundColor: Colors.white,
+        elevation: 0,
+      ),
+      body: Stack(
         children: [
-          _header(dateLabel),
-          Expanded(
-            child: StreamBuilder<DocumentSnapshot>(
-              stream: attendanceRef.snapshots(),
-              builder: (context, snapshot) {
-                bool sudahCheckout = false;
-                bool sudahReport = false;
-
-                if (snapshot.hasData && snapshot.data!.exists) {
-                  final data = snapshot.data!.data() as Map<String, dynamic>;
-                  sudahCheckout = data["checkOutTime"] != null;
-                  sudahReport = data["reportSubmitted"] == true;
-                }
-
-                if (!sudahCheckout) {
-                  return Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: _card(
+          Container(
+            height: 100,
+            decoration: const BoxDecoration(
+              color: Color(0xFF7A0C10),
+              borderRadius: BorderRadius.vertical(bottom: Radius.circular(32)),
+            ),
+          ),
+          SafeArea(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+              child: Column(
+                children: [
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(24),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.05),
+                          blurRadius: 15,
+                          offset: const Offset(0, 5),
+                        ),
+                      ],
+                    ),
+                    child: Form(
+                      key: _formKey,
                       child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: const [
-                          Icon(
-                            Icons.info_outline,
-                            size: 48,
-                            color: Colors.orange,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFFbeaea),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: const Icon(
+                                  Icons.task_alt,
+                                  color: Color(0xFF7A0C10),
+                                ),
+                              ),
+                              const SizedBox(width: 14),
+                              const Expanded(
+                                child: Text(
+                                  "Detail Kinerja",
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFF7A0C10),
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
-                          SizedBox(height: 12),
-                          Text(
-                            "Laporan hanya bisa diisi setelah absen pulang.",
-                            textAlign: TextAlign.center,
+                          const SizedBox(height: 24),
+
+                          if (earlyStatus)
+                            Container(
+                              margin: const EdgeInsets.only(bottom: 20),
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: Colors.orange.shade50,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: Colors.orange.shade200,
+                                ),
+                              ),
+                              child: const Row(
+                                children: [
+                                  Icon(
+                                    Icons.info_outline,
+                                    color: Colors.orange,
+                                  ),
+                                  SizedBox(width: 10),
+                                  Expanded(
+                                    child: Text(
+                                      "Laporan hanya dapat diisi setelah Anda Absen Pulang ATAU setelah pukul 17.00 WIB.",
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.orange,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+
+                          const Text(
+                            "Apa yang Anda kerjakan hari ini?",
                             style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 14,
+                              color: Colors.black87,
                             ),
                           ),
-                          SizedBox(height: 8),
-                          Text(
-                            "Silakan lakukan absen pulang terlebih dahulu.",
-                            textAlign: TextAlign.center,
+                          const SizedBox(height: 8),
+                          TextFormField(
+                            controller: tasksController,
+                            maxLines: 5,
+                            decoration: InputDecoration(
+                              hintText:
+                                  "Contoh:\n1. Menyusun dokumen sosialisasi\n2. Rapat koordinasi internal",
+                              hintStyle: const TextStyle(
+                                color: Colors.black38,
+                                fontSize: 13,
+                              ),
+                              filled: true,
+                              fillColor: const Color(0xFFF8FAFD),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(16),
+                                borderSide: BorderSide.none,
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(16),
+                                borderSide: const BorderSide(
+                                  color: Color(0xFF7A0C10),
+                                  width: 1.5,
+                                ),
+                              ),
+                            ),
+                            validator: (value) =>
+                                value == null || value.trim().isEmpty
+                                ? 'Mohon isi detail pekerjaan'
+                                : null,
+                          ),
+                          const SizedBox(height: 20),
+
+                          const Text(
+                            "Catatan Tambahan / Kendala (Opsional)",
                             style: TextStyle(
-                              fontSize: 13,
-                              color: Colors.black54,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 14,
+                              color: Colors.black87,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          TextFormField(
+                            controller: notesController,
+                            maxLines: 3,
+                            decoration: InputDecoration(
+                              hintText: "Tuliskan kendala jika ada...",
+                              hintStyle: const TextStyle(
+                                color: Colors.black38,
+                                fontSize: 13,
+                              ),
+                              filled: true,
+                              fillColor: const Color(0xFFF8FAFD),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(16),
+                                borderSide: BorderSide.none,
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(16),
+                                borderSide: const BorderSide(
+                                  color: Color(0xFF7A0C10),
+                                  width: 1.5,
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 30),
+
+                          SizedBox(
+                            width: double.infinity,
+                            height: 54,
+                            child: ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: cannotSubmit
+                                    ? Colors.grey
+                                    : const Color(0xFF7A0C10),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                elevation: 2,
+                              ),
+                              onPressed: (_loading || cannotSubmit)
+                                  ? null
+                                  : submitReport,
+                              child: _loading
+                                  ? const CircularProgressIndicator(
+                                      strokeWidth: 3,
+                                      color: Colors.white,
+                                    )
+                                  : Text(
+                                      expiredStatus
+                                          ? "Waktu Berakhir"
+                                          : "✅ Kirim Laporan",
+                                      style: const TextStyle(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.white,
+                                      ),
+                                    ),
                             ),
                           ),
                         ],
                       ),
                     ),
-                  );
-                }
-
-                return SingleChildScrollView(
-                  physics: const BouncingScrollPhysics(),
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    children: [
-                      if (sudahReport)
-                        Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.all(14),
-                          margin: const EdgeInsets.only(bottom: 16),
-                          decoration: BoxDecoration(
-                            color: Colors.green.withOpacity(0.12),
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: Colors.green.shade200),
-                          ),
-                          child: Row(
-                            children: const [
-                              Icon(Icons.check_circle, color: Colors.green),
-                              SizedBox(width: 10),
-                              Expanded(
-                                child: Text(
-                                  "Laporan hari ini sudah dikirim ✅",
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.green,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-
-                      if (expiredStatus)
-                        Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.all(14),
-                          margin: const EdgeInsets.only(bottom: 16),
-                          decoration: BoxDecoration(
-                            color: Colors.red.withOpacity(0.12),
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: Colors.red.shade200),
-                          ),
-                          child: Row(
-                            children: const [
-                              Icon(Icons.error_outline, color: Colors.red),
-                              SizedBox(width: 10),
-                              Expanded(
-                                child: Text(
-                                  "Waktu pengisian laporan sudah berakhir (Batas: 23:59) ❌",
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.red,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-
-                      _card(
-                        child: Form(
-                          key: _formKey,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text(
-                                "Isi Laporan Harian",
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              const SizedBox(height: 14),
-                              TextFormField(
-                                controller: tasksController,
-                                maxLines: 5,
-                                enabled:
-                                    !expiredStatus, // Disable field jika expired
-                                decoration: _inputDecoration(
-                                  "Pekerjaan hari ini (wajib)",
-                                  "Contoh: Menghadiri rapat, update data pemilih...",
-                                ),
-                                validator: (value) {
-                                  if (value == null || value.trim().isEmpty) {
-                                    return "Pekerjaan wajib diisi";
-                                  }
-                                  return null;
-                                },
-                              ),
-                              const SizedBox(height: 14),
-                              TextFormField(
-                                controller: notesController,
-                                maxLines: 4,
-                                enabled:
-                                    !expiredStatus, // Disable field jika expired
-                                decoration: _inputDecoration(
-                                  "Catatan tambahan (opsional)",
-                                  "Contoh: Kendala di lapangan / progress...",
-                                ),
-                              ),
-                              const SizedBox(height: 20),
-                              SizedBox(
-                                width: double.infinity,
-                                height: 54,
-                                child: ElevatedButton(
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: expiredStatus
-                                        ? Colors.grey
-                                        : const Color(0xFF7A0C10),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(18),
-                                    ),
-                                  ),
-                                  onPressed: (_loading || expiredStatus)
-                                      ? null
-                                      : submitReport,
-                                  child: _loading
-                                      ? const SizedBox(
-                                          height: 24,
-                                          width: 24,
-                                          child: CircularProgressIndicator(
-                                            strokeWidth: 3,
-                                            color: Colors.white,
-                                          ),
-                                        )
-                                      : Text(
-                                          expiredStatus
-                                              ? "Waktu Berakhir"
-                                              : "✅ Kirim Laporan",
-                                          style: const TextStyle(
-                                            fontSize: 15,
-                                            fontWeight: FontWeight.bold,
-                                            color: Colors.white,
-                                          ),
-                                        ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 30),
-                      const Text(
-                        "KPU Provinsi Kepulauan Riau 2026",
-                        style: TextStyle(color: Colors.black54, fontSize: 12),
-                      ),
-                      const SizedBox(height: 10),
-                    ],
                   ),
-                );
-              },
+                ],
+              ),
             ),
           ),
         ],

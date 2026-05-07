@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter/services.dart';
-import 'package:shared_preferences/shared_preferences.dart'; // ✅ Pastikan SharedPreferences diimport
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'login_page.dart';
 import 'checkin_page.dart';
@@ -49,7 +49,6 @@ class _HomePageState extends State<HomePage> {
     super.dispose();
   }
 
-  // ✅ FUNGSI UNTUK MENAMPILKAN DIALOG KONFIRMASI LOGOUT
   void _showLogoutDialog(BuildContext context) {
     showDialog(
       context: context,
@@ -68,7 +67,7 @@ class _HomePageState extends State<HomePage> {
           content: const Text("Apakah Anda yakin ingin keluar dari aplikasi?"),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(context), // Tutup dialog
+              onPressed: () => Navigator.pop(context),
               child: const Text("Batal", style: TextStyle(color: Colors.grey)),
             ),
             ElevatedButton(
@@ -79,14 +78,11 @@ class _HomePageState extends State<HomePage> {
                 ),
               ),
               onPressed: () async {
-                // ✅ Hapus Sesi
                 final prefs = await SharedPreferences.getInstance();
-                await prefs
-                    .clear(); // Menghapus NIP dan Nama agar Auto-Login mati
+                await prefs.clear();
 
                 if (!mounted) return;
 
-                // ✅ Pindah ke Login Page
                 Navigator.pushAndRemoveUntil(
                   context,
                   MaterialPageRoute(builder: (_) => const LoginPage()),
@@ -165,9 +161,16 @@ class _HomePageState extends State<HomePage> {
             }
           }
 
+          // ✅ LOGIKA JAM UNTUK TOMBOL DINAMIS
+          int currentHour = DateTime.now().hour;
+          bool isTimeForCheckout = currentHour >= 15;
+          bool isTimeForReport = currentHour >= 17;
+
           if (!sudahPulang) {
             sudahReport = false;
-            reportStatus = "Isi setelah pulang";
+            reportStatus = isTimeForReport
+                ? "Bisa diisi (Tanpa pulang)"
+                : "Isi setelah pulang";
           }
 
           return CustomScrollView(
@@ -266,7 +269,6 @@ class _HomePageState extends State<HomePage> {
                             ],
                           ),
                         ),
-                        // ✅ TOMBOL LOGOUT SEKARANG MEMANGGIL DIALOG
                         IconButton(
                           onPressed: () => _showLogoutDialog(context),
                           icon: const Icon(Icons.logout, color: Colors.white),
@@ -301,9 +303,7 @@ class _HomePageState extends State<HomePage> {
                                   Expanded(
                                     child: _statusTile(
                                       title: "Masuk",
-                                      subtitle: sudahMasuk
-                                          ? masukJam
-                                          : "Belum absen",
+                                      subtitle: sudahMasuk ? masukJam : "Belum",
                                       icon: Icons.login,
                                       active: sudahMasuk,
                                       color: Colors.green,
@@ -315,7 +315,7 @@ class _HomePageState extends State<HomePage> {
                                       title: "Pulang",
                                       subtitle: sudahPulang
                                           ? pulangJam
-                                          : "Belum absen",
+                                          : "Belum",
                                       icon: Icons.logout,
                                       active: sudahPulang,
                                       color: Colors.blue,
@@ -376,7 +376,10 @@ class _HomePageState extends State<HomePage> {
                                     child: PremiumMenuButton(
                                       icon: Icons.logout,
                                       label: "Absen Pulang",
-                                      enabled: sudahMasuk && !sudahPulang,
+                                      // ✅ Bisa diklik jika: (Belum pulang) DAN (Sudah masuk ATAU sudah jam 15.00)
+                                      enabled:
+                                          !sudahPulang &&
+                                          (sudahMasuk || isTimeForCheckout),
                                       onTap: () {
                                         HapticFeedback.lightImpact();
                                         Navigator.push(
@@ -399,8 +402,13 @@ class _HomePageState extends State<HomePage> {
                                     ? "Sudah dikirim ✅"
                                     : (sudahPulang
                                           ? "Isi laporan hari ini"
-                                          : "Isi setelah pulang"),
-                                enabled: sudahPulang && !sudahReport,
+                                          : (isTimeForReport
+                                                ? "Isi sekarang (Lupa pulang)"
+                                                : "Isi setelah pulang")),
+                                // ✅ Bisa diklik jika: (Belum report) DAN (Sudah pulang ATAU sudah jam 17.00)
+                                enabled:
+                                    !sudahReport &&
+                                    (sudahPulang || isTimeForReport),
                                 onTap: () {
                                   HapticFeedback.lightImpact();
                                   Navigator.push(
@@ -538,7 +546,6 @@ class _HomePageState extends State<HomePage> {
   }
 }
 
-// Komponen Pendukung
 class PremiumMenuButton extends StatelessWidget {
   final IconData icon;
   final String label;
