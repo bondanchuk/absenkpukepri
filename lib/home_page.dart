@@ -161,7 +161,6 @@ class _HomePageState extends State<HomePage> {
             }
           }
 
-          // ✅ LOGIKA JAM UNTUK TOMBOL DINAMIS
           int currentHour = DateTime.now().hour;
           bool isTimeForCheckout = currentHour >= 15;
           bool isTimeForReport = currentHour >= 17;
@@ -178,12 +177,17 @@ class _HomePageState extends State<HomePage> {
             slivers: [
               SliverAppBar(
                 pinned: true,
-                expandedHeight: 140,
+                expandedHeight: 115, // ✅ Dikecilkan dari 140 menjadi 115
                 backgroundColor: const Color(0xFF7A0C10),
                 automaticallyImplyLeading: false,
                 flexibleSpace: FlexibleSpaceBar(
                   background: Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 50, 10, 10),
+                    padding: const EdgeInsets.fromLTRB(
+                      20,
+                      40,
+                      10,
+                      10,
+                    ), // ✅ Padding atas disesuaikan
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -198,18 +202,18 @@ class _HomePageState extends State<HomePage> {
                                   color: Colors.white70,
                                 ),
                               ),
-                              const SizedBox(height: 2),
                               Text(
                                 widget.name.toUpperCase(),
                                 style: const TextStyle(
-                                  fontSize: 18,
+                                  fontSize:
+                                      17, // ✅ Sedikit disesuaikan agar proporsional
                                   fontWeight: FontWeight.bold,
                                   color: Colors.white,
                                 ),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
-                              const SizedBox(height: 4),
+                              const SizedBox(height: 2), // ✅ Spasi dirapatkan
                               StreamBuilder<DocumentSnapshot>(
                                 stream: userRef.snapshots(),
                                 builder: (context, userSnap) {
@@ -225,7 +229,7 @@ class _HomePageState extends State<HomePage> {
                                   return Text(
                                     jabatan,
                                     style: const TextStyle(
-                                      fontSize: 13,
+                                      fontSize: 12,
                                       fontWeight: FontWeight.w500,
                                       color: Colors.white70,
                                     ),
@@ -234,13 +238,13 @@ class _HomePageState extends State<HomePage> {
                                   );
                                 },
                               ),
-                              const SizedBox(height: 8),
+                              const SizedBox(height: 6), // ✅ Spasi dirapatkan
                               Row(
                                 children: [
                                   Text(
                                     todayLabel(),
                                     style: const TextStyle(
-                                      fontSize: 12,
+                                      fontSize: 11,
                                       color: Colors.white54,
                                     ),
                                   ),
@@ -257,7 +261,7 @@ class _HomePageState extends State<HomePage> {
                                     child: Text(
                                       "$_currentTime WIB",
                                       style: const TextStyle(
-                                        fontSize: 11,
+                                        fontSize: 10,
                                         fontWeight: FontWeight.bold,
                                         color: Colors.white,
                                         letterSpacing: 1,
@@ -278,7 +282,6 @@ class _HomePageState extends State<HomePage> {
                   ),
                 ),
               ),
-
               SliverToBoxAdapter(
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(16, 16, 16, 30),
@@ -337,7 +340,6 @@ class _HomePageState extends State<HomePage> {
                         ),
                       ),
                       const SizedBox(height: 16),
-
                       _premiumCard(
                         child: Padding(
                           padding: const EdgeInsets.all(16),
@@ -376,7 +378,6 @@ class _HomePageState extends State<HomePage> {
                                     child: PremiumMenuButton(
                                       icon: Icons.logout,
                                       label: "Absen Pulang",
-                                      // ✅ Bisa diklik jika: (Belum pulang) DAN (Sudah masuk ATAU sudah jam 15.00)
                                       enabled:
                                           !sudahPulang &&
                                           (sudahMasuk || isTimeForCheckout),
@@ -405,7 +406,6 @@ class _HomePageState extends State<HomePage> {
                                           : (isTimeForReport
                                                 ? "Isi sekarang (Lupa pulang)"
                                                 : "Isi setelah pulang")),
-                                // ✅ Bisa diklik jika: (Belum report) DAN (Sudah pulang ATAU sudah jam 17.00)
                                 enabled:
                                     !sudahReport &&
                                     (sudahPulang || isTimeForReport),
@@ -427,7 +427,6 @@ class _HomePageState extends State<HomePage> {
                         ),
                       ),
                       const SizedBox(height: 16),
-
                       _menuWideButton(
                         icon: Icons.history,
                         label: "Riwayat Absensi",

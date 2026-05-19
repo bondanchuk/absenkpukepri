@@ -25,7 +25,7 @@ class _CheckOutPageState extends State<CheckOutPage> {
 
   final double officeLat = 0.8969112;
   final double officeLng = 104.4773251;
-  final double radiusMeters = 300;
+  final double radiusMeters = 350; // ✅ Diubah menjadi 350m
 
   File? selfiePreview;
 
@@ -84,10 +84,12 @@ class _CheckOutPageState extends State<CheckOutPage> {
     // Jika _attendanceData null, otomatis dianggap Non-Shift (Bukan Security)
     final shift = _attendanceData?['shift'] ?? "Non-Shift";
 
-    if (shift == "Shift 1")
+    if (shift == "Shift 1") {
       return now.isBefore(DateTime(now.year, now.month, now.day, 15, 0));
-    if (shift == "Shift 2")
+    }
+    if (shift == "Shift 2") {
       return now.isBefore(DateTime(now.year, now.month, now.day, 23, 0));
+    }
     if (shift == "Shift 3") return now.hour < 7;
 
     // Pegawai Biasa (Non-Shift) atau belum absen masuk -> Boleh pulang mulai jam 15.00
@@ -121,16 +123,6 @@ class _CheckOutPageState extends State<CheckOutPage> {
       final docRef = FirebaseFirestore.instance
           .collection("attendance")
           .doc(_activeDocId);
-      final pos = await LocationService.getCurrentPosition();
-      final dist = LocationService.distanceInMeters(
-        pos.latitude,
-        pos.longitude,
-        officeLat,
-        officeLng,
-      );
-
-      if (pos.accuracy > 25) throw Exception("Akurasi GPS terlalu buruk.");
-      if (pos.isMocked) throw Exception("Fake GPS terdeteksi.");
 
       // Cek mode WFH: Jika belum absen masuk & hari ini Jumat, otomatis bebas radius
       bool isWfh = _attendanceData?['workMode'] == "WFH";
@@ -139,10 +131,31 @@ class _CheckOutPageState extends State<CheckOutPage> {
         isWfh = true;
       }
 
-      if (!isWfh && dist > radiusMeters) {
-        throw Exception(
-          "Di luar area kantor.\nJarak: ${dist.toStringAsFixed(1)} m",
+      double lat = 0.0;
+      double lng = 0.0;
+      double dist = 0.0;
+
+      // ✅ Lakukan pengecekan GPS HANYA JIKA BUKAN WFH (Selain Jumat)
+      if (!isWfh) {
+        final pos = await LocationService.getCurrentPosition();
+        dist = LocationService.distanceInMeters(
+          pos.latitude,
+          pos.longitude,
+          officeLat,
+          officeLng,
         );
+
+        if (pos.accuracy > 25) throw Exception("Akurasi GPS terlalu buruk.");
+        if (pos.isMocked) throw Exception("Fake GPS terdeteksi.");
+
+        if (dist > radiusMeters) {
+          throw Exception(
+            "Di luar area kantor.\nJarak: ${dist.toStringAsFixed(1)} m",
+          );
+        }
+
+        lat = pos.latitude;
+        lng = pos.longitude;
       }
 
       final picker = ImagePicker();
@@ -168,8 +181,8 @@ class _CheckOutPageState extends State<CheckOutPage> {
         "nip": widget.nip,
         "date": DateFormat("yyyy-MM-dd").format(now),
         "checkOutTime": now.toIso8601String(),
-        "checkOutLat": pos.latitude,
-        "checkOutLng": pos.longitude,
+        "checkOutLat": lat,
+        "checkOutLng": lng,
         "distanceOut": dist,
         "checkOutSelfieUrl": selfieUrl,
         "updatedAt": FieldValue.serverTimestamp(),
@@ -299,7 +312,7 @@ class _CheckOutPageState extends State<CheckOutPage> {
                         : "Lokasi & Radius",
                     _attendanceData?['workMode'] == "WFH"
                         ? "Radius bebas"
-                        : "Maksimal radius 300m",
+                        : "Maksimal radius 350m", // ✅ Tulisan disesuaikan
                     _attendanceData?['workMode'] == "WFH"
                         ? Icons.home_work
                         : Icons.my_location,

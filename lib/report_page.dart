@@ -97,6 +97,8 @@ class _ReportPageState extends State<ReportPage> {
       await docRef.set({
         "nip": widget.nip,
         "date": DateFormat("yyyy-MM-dd").format(now),
+        "reportSubmitted":
+            true, // ✅ KEMBALI DITAMBAHKAN SESUAI VERSI SEBELUMNYA
         "performanceReport": {
           "tasks": tasksController.text.trim(),
           "notes": notesController.text.trim(),
