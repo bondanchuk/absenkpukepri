@@ -27,14 +27,14 @@ class _ReportPageState extends State<ReportPage> {
     loadExistingReport();
   }
 
-  // ✅ Fungsi Cek Batas Waktu Akhir (23.59)
+  // Cek Batas Waktu Akhir (23.59)
   bool isExpired() {
     final now = DateTime.now();
     final deadline = DateTime(now.year, now.month, now.day, 23, 59, 59);
     return now.isAfter(deadline);
   }
 
-  // ✅ Fungsi Cek Belum Waktunya (Boleh jika sudah pulang ATAU sudah jam 17.00)
+  // Cek Belum Waktunya (Boleh jika sudah pulang ATAU sudah jam 17.00)
   bool isTooEarly() {
     if (_hasCheckedOut) return false; // Sudah pulang = Bebas isi
     final now = DateTime.now();
@@ -94,11 +94,11 @@ class _ReportPageState extends State<ReportPage> {
           .doc(widget.docId);
       final now = DateTime.now();
 
+      // Menyimpan data laporan kinerja tanpa koordinat GPS
       await docRef.set({
         "nip": widget.nip,
         "date": DateFormat("yyyy-MM-dd").format(now),
-        "reportSubmitted":
-            true, // ✅ KEMBALI DITAMBAHKAN SESUAI VERSI SEBELUMNYA
+        "reportSubmitted": true,
         "performanceReport": {
           "tasks": tasksController.text.trim(),
           "notes": notesController.text.trim(),
