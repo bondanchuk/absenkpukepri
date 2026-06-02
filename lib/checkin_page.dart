@@ -10,7 +10,6 @@ import 'cloudinary_service.dart';
 
 class CheckInPage extends StatefulWidget {
   final String nip;
-  // Hapus required positions agar tidak error dari HomePage
   const CheckInPage({super.key, required this.nip});
 
   @override
@@ -19,7 +18,7 @@ class CheckInPage extends StatefulWidget {
 
 class _CheckInPageState extends State<CheckInPage> {
   bool _loading = false;
-  bool _isLoadingData = true; // Untuk loading ambil data user
+  bool _isLoadingData = true;
   bool _isSecurity = false;
 
   String? selectedShift;
@@ -29,7 +28,7 @@ class _CheckInPageState extends State<CheckInPage> {
   // Koordinat Kantor
   final double officeLat = 0.8969112;
   final double officeLng = 104.4773251;
-  final double radiusMeters = 350; // ✅ Diubah menjadi 350m
+  final double radiusMeters = 350; // Radius 350m untuk selain hari Jumat
 
   @override
   void initState() {
@@ -37,7 +36,6 @@ class _CheckInPageState extends State<CheckInPage> {
     _fetchUserData();
   }
 
-  // ✅ AMBIL JABATAN DARI FIRESTORE SECARA LANGSUNG
   Future<void> _fetchUserData() async {
     try {
       final doc = await FirebaseFirestore.instance
@@ -49,7 +47,6 @@ class _CheckInPageState extends State<CheckInPage> {
         final posisi = data["positions"]?.toString().toLowerCase() ?? "";
         if (posisi.contains("satpam") || posisi.contains("security")) {
           _isSecurity = true;
-          // Set default shift ke Shift 1 agar dropdown ada nilai awal
           selectedShift = "Shift 1";
         }
       }
@@ -62,23 +59,13 @@ class _CheckInPageState extends State<CheckInPage> {
     }
   }
 
-  // Cek jika Security, dan belum jam absen sesuai shift
   bool isSecurityAndOutsideShift() {
     if (!_isSecurity || selectedShift == null) return false;
 
     final now = DateTime.now();
-    // Jam 06.00 - 08.00 pagi
-    if (selectedShift == "Shift 1") {
-      return now.hour < 6 || now.hour >= 8;
-    }
-    // Jam 14.00 - 16.00 sore
-    if (selectedShift == "Shift 2") {
-      return now.hour < 14 || now.hour >= 16;
-    }
-    // Jam 22.00 - 23.59 malam
-    if (selectedShift == "Shift 3") {
-      return now.hour < 22; // Asumsi maksimal 23:59 tidak perlu batas atas jam
-    }
+    if (selectedShift == "Shift 1") return now.hour < 6 || now.hour >= 8;
+    if (selectedShift == "Shift 2") return now.hour < 14 || now.hour >= 16;
+    if (selectedShift == "Shift 3") return now.hour < 22;
 
     return false;
   }
@@ -103,8 +90,7 @@ class _CheckInPageState extends State<CheckInPage> {
       double lng = 0.0;
       double dist = 0.0;
 
-      // ✅ Lakukan pengecekan GPS HANYA JIKA BUKAN WFH (Selain Jumat)
-      // Jika WFH, sistem tidak akan menyalakan/memeriksa GPS
+      // Pengecekan GPS dilewati otomatis pada hari Jumat
       if (!isWfh) {
         final pos = await LocationService.getCurrentPosition();
         dist = LocationService.distanceInMeters(
@@ -131,20 +117,17 @@ class _CheckInPageState extends State<CheckInPage> {
       final picked = await picker.pickImage(
         source: ImageSource.camera,
         preferredCameraDevice: CameraDevice.front,
-        imageQuality: 100, // Menjaga kualitas terbaik dari kamera
+        imageQuality: 100,
       );
       if (picked == null) throw Exception("Selfie wajib untuk absen.");
 
       final originalFile = File(picked.path);
       setState(() => selfiePreview = originalFile);
 
-      // ✅ COMPRESS GAMBAR SEBELUM UPLOAD
       final compressedFile = await CloudinaryService.compressTo200KB(
         originalFile,
       );
-      if (compressedFile == null) {
-        throw Exception("Gagal mengompres gambar.");
-      }
+      if (compressedFile == null) throw Exception("Gagal mengompres gambar.");
 
       final selfieUrl = await CloudinaryService.uploadImage(compressedFile);
 
@@ -168,9 +151,7 @@ class _CheckInPageState extends State<CheckInPage> {
         "distanceIn": dist,
         "workMode": isWfh ? "WFH" : "WFO",
         "checkInSelfieUrl": selfieUrl,
-        "shift": _isSecurity
-            ? selectedShift
-            : "Non-Shift", // Simpan shift jika security
+        "shift": _isSecurity ? selectedShift : "Non-Shift",
         "createdAt": FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
 
@@ -235,7 +216,6 @@ class _CheckInPageState extends State<CheckInPage> {
 
     bool isFriday = DateTime.now().weekday == DateTime.friday;
     bool isWfh = isFriday;
-
     bool cannotAbsen = isSecurityAndOutsideShift();
 
     return Scaffold(
@@ -279,7 +259,6 @@ class _CheckInPageState extends State<CheckInPage> {
                   ),
                   const SizedBox(height: 14),
 
-                  // ✅ Jika Security, tampilkan Dropdown Shift
                   if (_isSecurity) ...[
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -329,7 +308,6 @@ class _CheckInPageState extends State<CheckInPage> {
                       cannotAbsen ? Colors.red : Colors.green,
                     ),
                   ] else ...[
-                    // Jika Reguler, hanya tampilkan teks tanpa dropdown
                     infoBox(
                       "Waktu Absen",
                       "06.00 - 08.00 WIB",
@@ -339,13 +317,12 @@ class _CheckInPageState extends State<CheckInPage> {
                   ],
 
                   const SizedBox(height: 12),
+                  // ✅ Teks Info GPS dipertegas untuk hari Jumat
                   infoBox(
                     isWfh ? "Mode WFH Aktif" : "Lokasi & Radius",
-                    isWfh
-                        ? "Radius bebas"
-                        : "Maksimal radius 350m", // ✅ Tulisan disesuaikan
-                    isWfh ? Icons.home_work : Icons.my_location,
-                    Colors.blue,
+                    isWfh ? "Tanpa akses GPS / Lokasi" : "Maksimal radius 350m",
+                    isWfh ? Icons.location_off : Icons.my_location,
+                    isWfh ? Colors.green : Colors.blue,
                   ),
 
                   if (selfiePreview != null) ...[

@@ -25,7 +25,7 @@ class _CheckOutPageState extends State<CheckOutPage> {
 
   final double officeLat = 0.8969112;
   final double officeLng = 104.4773251;
-  final double radiusMeters = 350; // ✅ Diubah menjadi 350m
+  final double radiusMeters = 350; // Radius 350m untuk selain hari Jumat
 
   File? selfiePreview;
 
@@ -35,7 +35,6 @@ class _CheckOutPageState extends State<CheckOutPage> {
     _fetchActiveAttendance();
   }
 
-  // ✅ LOGIKA BARU: Jika belum absen masuk, tetap set _activeDocId untuk hari ini
   Future<void> _fetchActiveAttendance() async {
     try {
       final now = DateTime.now();
@@ -53,21 +52,16 @@ class _CheckOutPageState extends State<CheckOutPage> {
           .get();
 
       if (todayDoc.exists && todayDoc.data()?['checkOutTime'] == null) {
-        // Sudah absen masuk hari ini, belum pulang
         _activeDocId = todayId;
         _attendanceData = todayDoc.data();
       } else if (yesterdayDoc.exists &&
           yesterdayDoc.data()?['checkOutTime'] == null &&
           yesterdayDoc.data()?['shift'] == 'Shift 3') {
-        // Shift 3 kemarin malam, belum pulang
         _activeDocId = yesterdayId;
         _attendanceData = yesterdayDoc.data();
       } else if (todayDoc.exists && todayDoc.data()?['checkOutTime'] != null) {
-        // Sudah pulang hari ini
         _activeDocId = null;
       } else {
-        // BELUM ABSEN MASUK SAMA SEKALI
-        // Tetap izinkan untuk absen pulang (Dokumen akan dibuat saat disubmit)
         _activeDocId = todayId;
         _attendanceData = null;
       }
@@ -78,21 +72,16 @@ class _CheckOutPageState extends State<CheckOutPage> {
     }
   }
 
-  // ✅ WAKTU MINIMAL BOLEH PULANG
   bool isTooEarly() {
     final now = DateTime.now();
-    // Jika _attendanceData null, otomatis dianggap Non-Shift (Bukan Security)
     final shift = _attendanceData?['shift'] ?? "Non-Shift";
 
-    if (shift == "Shift 1") {
+    if (shift == "Shift 1")
       return now.isBefore(DateTime(now.year, now.month, now.day, 15, 0));
-    }
-    if (shift == "Shift 2") {
+    if (shift == "Shift 2")
       return now.isBefore(DateTime(now.year, now.month, now.day, 23, 0));
-    }
     if (shift == "Shift 3") return now.hour < 7;
 
-    // Pegawai Biasa (Non-Shift) atau belum absen masuk -> Boleh pulang mulai jam 15.00
     return now.isBefore(DateTime(now.year, now.month, now.day, 15, 0));
   }
 
@@ -124,7 +113,6 @@ class _CheckOutPageState extends State<CheckOutPage> {
           .collection("attendance")
           .doc(_activeDocId);
 
-      // Cek mode WFH: Jika belum absen masuk & hari ini Jumat, otomatis bebas radius
       bool isWfh = _attendanceData?['workMode'] == "WFH";
       bool isFriday = DateTime.now().weekday == DateTime.friday;
       if (_attendanceData == null && isFriday) {
@@ -135,7 +123,7 @@ class _CheckOutPageState extends State<CheckOutPage> {
       double lng = 0.0;
       double dist = 0.0;
 
-      // ✅ Lakukan pengecekan GPS HANYA JIKA BUKAN WFH (Selain Jumat)
+      // Pengecekan GPS dilewati otomatis pada hari Jumat
       if (!isWfh) {
         final pos = await LocationService.getCurrentPosition();
         dist = LocationService.distanceInMeters(
@@ -175,8 +163,6 @@ class _CheckOutPageState extends State<CheckOutPage> {
       final selfieUrl = await CloudinaryService.uploadImage(compressed);
       final now = DateTime.now();
 
-      // ✅ Gunakan SetOptions(merge: true) agar jika dokumen belum ada (tidak absen masuk),
-      // Firebase akan otomatis membuatnya, lengkap dengan NIP dan Date.
       await docRef.set({
         "nip": widget.nip,
         "date": DateFormat("yyyy-MM-dd").format(now),
@@ -260,6 +246,11 @@ class _CheckOutPageState extends State<CheckOutPage> {
 
     final bool earlyStatus = isTooEarly();
 
+    // Status pengecekan tampilan UI
+    bool isWfhMode =
+        _attendanceData?['workMode'] == "WFH" ||
+        (_attendanceData == null && DateTime.now().weekday == DateTime.friday);
+
     return Scaffold(
       backgroundColor: const Color(0xFFF4F6FA),
       appBar: AppBar(
@@ -306,18 +297,17 @@ class _CheckOutPageState extends State<CheckOutPage> {
                     earlyStatus ? Colors.orange : Colors.green,
                   ),
                   const SizedBox(height: 12),
+
+                  // ✅ Teks Info GPS dipertegas untuk hari Jumat
                   infoBox(
-                    _attendanceData?['workMode'] == "WFH"
-                        ? "Mode WFH Aktif"
-                        : "Lokasi & Radius",
-                    _attendanceData?['workMode'] == "WFH"
-                        ? "Radius bebas"
-                        : "Maksimal radius 350m", // ✅ Tulisan disesuaikan
-                    _attendanceData?['workMode'] == "WFH"
-                        ? Icons.home_work
-                        : Icons.my_location,
-                    Colors.blue,
+                    isWfhMode ? "Mode WFH Aktif" : "Lokasi & Radius",
+                    isWfhMode
+                        ? "Tanpa akses GPS / Lokasi"
+                        : "Maksimal radius 350m",
+                    isWfhMode ? Icons.location_off : Icons.my_location,
+                    isWfhMode ? Colors.green : Colors.blue,
                   ),
+
                   if (selfiePreview != null) ...[
                     const SizedBox(height: 16),
                     ClipRRect(
