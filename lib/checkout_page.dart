@@ -303,7 +303,7 @@ class _CheckOutPageState extends State<CheckOutPage> {
                     isWfhMode ? "Mode WFH Aktif" : "Lokasi & Radius",
                     isWfhMode
                         ? "Tanpa akses GPS / Lokasi"
-                        : "Maksimal radius 350m",
+                        : "Harus di area kantor",
                     isWfhMode ? Icons.location_off : Icons.my_location,
                     isWfhMode ? Colors.green : Colors.blue,
                   ),

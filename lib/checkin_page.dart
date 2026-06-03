@@ -310,7 +310,7 @@ class _CheckInPageState extends State<CheckInPage> {
                   ] else ...[
                     infoBox(
                       "Waktu Absen",
-                      "06.00 - 08.00 WIB",
+                      "06.00 - 09.00 WIB",
                       Icons.access_time_filled,
                       Colors.green,
                     ),
@@ -319,8 +319,8 @@ class _CheckInPageState extends State<CheckInPage> {
                   const SizedBox(height: 12),
                   // ✅ Teks Info GPS dipertegas untuk hari Jumat
                   infoBox(
-                    isWfh ? "Mode WFH Aktif" : "Lokasi & Radius",
-                    isWfh ? "Tanpa akses GPS / Lokasi" : "Maksimal radius 350m",
+                    isWfh ? "Mode WFH Aktif" : "Lokasi",
+                    isWfh ? "Tanpa akses GPS / Lokasi" : "Harus di area kantor",
                     isWfh ? Icons.location_off : Icons.my_location,
                     isWfh ? Colors.green : Colors.blue,
                   ),

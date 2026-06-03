@@ -35,7 +35,8 @@ class _AttendanceHistoryPageState extends State<AttendanceHistoryPage> {
 
     final startDocId =
         "${widget.nip}_${DateFormat("yyyyMMdd").format(monthDate)}";
-    final endDocId = "${widget.nip}_${DateFormat("yyyyMMdd").format(nextMonth)}";
+    final endDocId =
+        "${widget.nip}_${DateFormat("yyyyMMdd").format(nextMonth)}";
 
     return FirebaseFirestore.instance
         .collection("attendance")
@@ -46,8 +47,10 @@ class _AttendanceHistoryPageState extends State<AttendanceHistoryPage> {
 
   @override
   Widget build(BuildContext context) {
-    final monthLabel = DateFormat("MMMM yyyy", "id_ID")
-        .format(DateTime.parse("$selectedMonth-01"));
+    final monthLabel = DateFormat(
+      "MMMM yyyy",
+      "id_ID",
+    ).format(DateTime.parse("$selectedMonth-01"));
 
     return Scaffold(
       backgroundColor: const Color(0xFFF4F6FA),
@@ -82,8 +85,10 @@ class _AttendanceHistoryPageState extends State<AttendanceHistoryPage> {
                   isExpanded: true,
                   icon: const Icon(Icons.keyboard_arrow_down),
                   items: getMonthOptions().map((m) {
-                    final label = DateFormat("MMMM yyyy", "id_ID")
-                        .format(DateTime.parse("$m-01"));
+                    final label = DateFormat(
+                      "MMMM yyyy",
+                      "id_ID",
+                    ).format(DateTime.parse("$m-01"));
                     return DropdownMenuItem(value: m, child: Text(label));
                   }).toList(),
                   onChanged: (val) {
@@ -127,17 +132,26 @@ class _AttendanceHistoryPageState extends State<AttendanceHistoryPage> {
                     final date = data["date"] ?? "-";
                     final checkIn = data["checkInTime"];
                     final checkOut = data["checkOutTime"];
+                    final statusText = data["status"] ?? ""; // Ambil status
+
+                    // ✅ Cek apakah hari tersebut adalah hari pengajuan (izin/sakit/dinas)
+                    bool isLeaveDay =
+                        statusText.isNotEmpty &&
+                        statusText != "Hadir" &&
+                        statusText != "valid";
 
                     String masuk = "-";
                     String pulang = "-";
 
                     if (checkIn != null) {
-                      masuk =
-                          DateFormat("HH:mm").format(DateTime.parse(checkIn));
+                      masuk = DateFormat(
+                        "HH:mm",
+                      ).format(DateTime.parse(checkIn));
                     }
                     if (checkOut != null) {
-                      pulang =
-                          DateFormat("HH:mm").format(DateTime.parse(checkOut));
+                      pulang = DateFormat(
+                        "HH:mm",
+                      ).format(DateTime.parse(checkOut));
                     }
 
                     final sudahReport = data["reportSubmitted"] == true;
@@ -159,60 +173,107 @@ class _AttendanceHistoryPageState extends State<AttendanceHistoryPage> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            DateFormat("EEEE, dd MMMM yyyy", "id_ID")
-                                .format(DateTime.parse(date)),
+                            DateFormat(
+                              "EEEE, dd MMMM yyyy",
+                              "id_ID",
+                            ).format(DateTime.parse(date)),
                             style: const TextStyle(
                               fontWeight: FontWeight.bold,
                               fontSize: 14,
                             ),
                           ),
                           const SizedBox(height: 10),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: _infoChip(
-                                  label: "Masuk",
-                                  value: masuk,
-                                  icon: Icons.login,
-                                  color: Colors.green,
+
+                          // ✅ TAMPILAN BERUBAH JIKA SEDANG IZIN/DINAS
+                          if (isLeaveDay)
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 12,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.orange.shade50,
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(
+                                  color: Colors.orange.shade200,
                                 ),
                               ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: _infoChip(
-                                  label: "Pulang",
-                                  value: pulang,
-                                  icon: Icons.logout,
-                                  color: Colors.blue,
-                                ),
+                              child: Row(
+                                children: [
+                                  const Icon(
+                                    Icons.info_outline,
+                                    color: Colors.orange,
+                                    size: 20,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    "Status: $statusText",
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      color: Colors.orange.shade800,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
                               ),
-                            ],
-                          ),
+                            )
+                          else
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: _infoChip(
+                                    label: "Masuk",
+                                    value: masuk,
+                                    icon: Icons.login,
+                                    color: Colors.green,
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: _infoChip(
+                                    label: "Pulang",
+                                    value: pulang,
+                                    icon: Icons.logout,
+                                    color: Colors.blue,
+                                  ),
+                                ),
+                              ],
+                            ),
+
                           const SizedBox(height: 12),
                           Row(
                             children: [
                               Icon(
-                                sudahReport
-                                    ? Icons.check_circle
-                                    : Icons.cancel,
+                                isLeaveDay
+                                    ? Icons.info
+                                    : (sudahReport
+                                          ? Icons.check_circle
+                                          : Icons.cancel),
                                 size: 18,
-                                color: sudahReport
-                                    ? Colors.green
-                                    : Colors.redAccent,
+                                color: isLeaveDay
+                                    ? Colors.orange
+                                    : (sudahReport
+                                          ? Colors.green
+                                          : Colors.redAccent),
                               ),
                               const SizedBox(width: 8),
                               Text(
-                                sudahReport
-                                    ? "Laporan kinerja sudah diisi"
-                                    : "Laporan kinerja belum diisi",
+                                isLeaveDay
+                                    ? "Laporan kinerja tidak diwajibkan"
+                                    : (sudahReport
+                                          ? "Laporan kinerja sudah diisi"
+                                          : "Laporan kinerja belum diisi"),
                                 style: TextStyle(
                                   fontSize: 13,
-                                  color: sudahReport
-                                      ? Colors.green
-                                      : Colors.redAccent,
+                                  color: isLeaveDay
+                                      ? Colors.orange
+                                      : (sudahReport
+                                            ? Colors.green
+                                            : Colors.redAccent),
                                   fontWeight: FontWeight.w600,
                                 ),
-                              )
+                              ),
                             ],
                           ),
                         ],

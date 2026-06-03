@@ -10,7 +10,7 @@ import 'checkin_page.dart';
 import 'checkout_page.dart';
 import 'report_page.dart';
 import 'attendance_history_page.dart';
-import 'pengajuan_page.dart'; // ✅ Import halaman pengajuan baru
+import 'pengajuan_page.dart';
 
 class HomePage extends StatefulWidget {
   final String nip;
@@ -138,7 +138,6 @@ class _HomePageState extends State<HomePage> {
           bool sudahPulang = false;
           bool sudahReport = false;
 
-          // ✅ Variabel Status Izin/Sakit/Dinas
           bool isLeaveDay = false;
           String leaveStatus = "";
 
@@ -149,11 +148,9 @@ class _HomePageState extends State<HomePage> {
           if (snapshot.hasData && snapshot.data!.exists) {
             final data = snapshot.data!.data() as Map<String, dynamic>;
 
-            // ✅ Cek apakah hari ini ada status pengajuan
             if (data['status'] != null && data['status'] != 'valid') {
               isLeaveDay = true;
-              leaveStatus =
-                  data['status']; // "Izin", "Sakit", atau "Perjalanan Dinas"
+              leaveStatus = data['status'];
             }
 
             if (data["checkInTime"] != null) {
@@ -178,14 +175,16 @@ class _HomePageState extends State<HomePage> {
           bool isTimeForCheckout = currentHour >= 15;
           bool isTimeForReport = currentHour >= 17;
 
-          if (!sudahPulang && !isLeaveDay) {
-            sudahReport = false;
-            reportStatus = isTimeForReport
-                ? "Bisa diisi (Tanpa pulang)"
-                : "Isi setelah pulang";
-          } else if (isLeaveDay) {
-            // ✅ Jika sedang izin/dinas, tidak wajib laporan kinerja
+          if (isLeaveDay) {
             reportStatus = "Tidak wajib (Sedang $leaveStatus)";
+          } else if (!sudahReport) {
+            if (!sudahPulang) {
+              reportStatus = isTimeForReport
+                  ? "Bisa diisi (Tanpa pulang)"
+                  : "Isi setelah pulang";
+            } else {
+              reportStatus = "Isi laporan hari ini";
+            }
           }
 
           return CustomScrollView(
@@ -193,7 +192,7 @@ class _HomePageState extends State<HomePage> {
             slivers: [
               SliverAppBar(
                 pinned: true,
-                expandedHeight: 115, // Header kecil
+                expandedHeight: 115,
                 backgroundColor: const Color(0xFF7A0C10),
                 automaticallyImplyLeading: false,
                 flexibleSpace: FlexibleSpaceBar(
@@ -297,7 +296,6 @@ class _HomePageState extends State<HomePage> {
                   padding: const EdgeInsets.fromLTRB(16, 16, 16, 30),
                   child: Column(
                     children: [
-                      // ✅ TAMPILAN BANNER JIKA SEDANG IZIN/DINAS
                       if (isLeaveDay)
                         Container(
                           margin: const EdgeInsets.only(bottom: 16),
@@ -404,9 +402,7 @@ class _HomePageState extends State<HomePage> {
                                     child: PremiumMenuButton(
                                       icon: Icons.login,
                                       label: "Absen Masuk",
-                                      enabled:
-                                          !sudahMasuk &&
-                                          !isLeaveDay, // ✅ Block jika sedang Izin/Dinas
+                                      enabled: !sudahMasuk && !isLeaveDay,
                                       onTap: () {
                                         HapticFeedback.lightImpact();
                                         Navigator.push(
@@ -427,7 +423,7 @@ class _HomePageState extends State<HomePage> {
                                       enabled:
                                           !sudahPulang &&
                                           (sudahMasuk || isTimeForCheckout) &&
-                                          !isLeaveDay, // ✅ Block jika sedang Izin/Dinas
+                                          !isLeaveDay,
                                       onTap: () {
                                         HapticFeedback.lightImpact();
                                         Navigator.push(
@@ -458,7 +454,7 @@ class _HomePageState extends State<HomePage> {
                                 enabled:
                                     !sudahReport &&
                                     (sudahPulang || isTimeForReport) &&
-                                    !isLeaveDay, // ✅ Block jika sedang Izin/Dinas
+                                    !isLeaveDay,
                                 onTap: () {
                                   HapticFeedback.lightImpact();
                                   Navigator.push(
@@ -477,11 +473,15 @@ class _HomePageState extends State<HomePage> {
                         ),
                       ),
                       const SizedBox(height: 16),
-
-                      // ✅ TOMBOL BARU UNTUK PENGAJUAN IZIN/DINAS
+                      // ✅ PENAMBAHAN FUNGSI ENABLED DI SINI
                       _menuWideButton(
                         icon: Icons.edit_document,
-                        label: "Pengajuan Izin / Dinas",
+                        label: isLeaveDay
+                            ? "Permohonan (Sudah Diajukan)"
+                            : "Permohonan Izin / Dinas",
+                        enabled:
+                            !isLeaveDay &&
+                            !sudahMasuk, // Tombol mati jika sudah izin/absen masuk
                         colorStart: const Color(0xFFE67E22),
                         colorEnd: const Color(0xFFD35400),
                         onTap: () {
@@ -497,11 +497,10 @@ class _HomePageState extends State<HomePage> {
                         },
                       ),
                       const SizedBox(height: 12),
-
-                      // Tombol Riwayat Absensi Bawaan
                       _menuWideButton(
                         icon: Icons.history,
                         label: "Riwayat Absensi",
+                        enabled: true, // Riwayat selalu aktif
                         colorStart: const Color(0xFF7A0C10),
                         colorEnd: const Color(0xFFB31217),
                         onTap: () {
@@ -740,22 +739,27 @@ class PremiumMenuButtonWide extends StatelessWidget {
   }
 }
 
+// ✅ PENAMBAHAN PARAMETER ENABLED PADA WIDGET _menuWideButton
 Widget _menuWideButton({
   required IconData icon,
   required String label,
   required VoidCallback onTap,
   required Color colorStart,
   required Color colorEnd,
+  required bool enabled, // Properti tambahan untuk lock
 }) {
   return InkWell(
     borderRadius: BorderRadius.circular(16),
-    onTap: onTap,
+    onTap: enabled ? onTap : null,
     child: Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
+        // Jika mati, tombol berubah warna jadi abu-abu
         gradient: LinearGradient(
-          colors: [colorStart, colorEnd],
+          colors: enabled
+              ? [colorStart, colorEnd]
+              : [Colors.grey.shade400, Colors.grey.shade500],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -775,7 +779,8 @@ Widget _menuWideButton({
               ),
             ),
           ),
-          const Icon(Icons.chevron_right, color: Colors.white),
+          // Sembunyikan ikon panah jika tombol mati
+          if (enabled) const Icon(Icons.chevron_right, color: Colors.white),
         ],
       ),
     ),

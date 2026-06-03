@@ -45,7 +45,7 @@ class _PengajuanPageState extends State<PengajuanPage> {
     if (_selectedType == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text("❌ Pilih kategori pengajuan terlebih dahulu."),
+          content: Text("❌ Pilih kategori permohonan terlebih dahulu."),
         ),
       );
       return;
@@ -101,7 +101,9 @@ class _PengajuanPageState extends State<PengajuanPage> {
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("✅ Pengajuan $_selectedType berhasil dikirim!")),
+        SnackBar(
+          content: Text("✅ Permohonan $_selectedType berhasil dikirim!"),
+        ),
       );
       Navigator.pop(context);
     } catch (e) {
@@ -117,7 +119,7 @@ class _PengajuanPageState extends State<PengajuanPage> {
       backgroundColor: const Color(0xFFF4F6FA),
       appBar: AppBar(
         title: const Text(
-          "Pengajuan Absensi",
+          "Permohonan Absensi",
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
         backgroundColor: const Color(0xFF7A0C10),
@@ -148,7 +150,7 @@ class _PengajuanPageState extends State<PengajuanPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
-                      "Kategori Pengajuan",
+                      "Kategori Permohonan",
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 14,
@@ -315,7 +317,7 @@ class _PengajuanPageState extends State<PengajuanPage> {
                   child: _loading
                       ? const CircularProgressIndicator(color: Colors.white)
                       : const Text(
-                          "Kirim Pengajuan",
+                          "Kirim Permohonan",
                           style: TextStyle(
                             fontSize: 15,
                             fontWeight: FontWeight.bold,
