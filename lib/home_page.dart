@@ -26,6 +26,9 @@ class _HomePageState extends State<HomePage> {
   Timer? _timer;
   String _currentTime = "";
 
+  // ✅ Variabel penampung status WFH Dinamis
+  bool isWfhToday = false;
+
   @override
   void initState() {
     super.initState();
@@ -34,6 +37,38 @@ class _HomePageState extends State<HomePage> {
       const Duration(seconds: 1),
       (Timer t) => _updateTime(),
     );
+
+    // Panggil fungsi cek WFH saat halaman dimuat
+    _checkWfhStatus();
+  }
+
+  // ✅ FUNGSI BACA PENGATURAN WFH DARI FIRESTORE
+  Future<void> _checkWfhStatus() async {
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection("settings")
+          .doc("wfh_config")
+          .get();
+      if (doc.exists) {
+        final data = doc.data()!;
+        List<dynamic> wfhDays = data['wfh_days'] ?? [];
+        List<dynamic> wfhDates = data['wfh_dates'] ?? [];
+
+        final now = DateTime.now();
+        final todayString = DateFormat("yyyy-MM-dd").format(now);
+
+        // Cek apakah hari (1-7) atau tanggal (yyyy-mm-dd) cocok
+        if (wfhDays.contains(now.weekday) || wfhDates.contains(todayString)) {
+          if (mounted) {
+            setState(() {
+              isWfhToday = true;
+            });
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint("Gagal cek WFH status: $e");
+    }
   }
 
   void _updateTime() {
@@ -145,12 +180,22 @@ class _HomePageState extends State<HomePage> {
           String pulangJam = "-";
           String reportStatus = "-";
 
+          // Gunakan status WFH dari _checkWfhStatus, namun periksa juga history database
+          bool isWfhMode = isWfhToday;
+
           if (snapshot.hasData && snapshot.data!.exists) {
             final data = snapshot.data!.data() as Map<String, dynamic>;
 
-            if (data['status'] != null && data['status'] != 'valid') {
+            if (data['status'] != null &&
+                data['status'] != 'Hadir' &&
+                data['status'] != 'valid') {
               isLeaveDay = true;
               leaveStatus = data['status'];
+            }
+
+            // Cek apakah database hari ini merekam mode kerja "WFH"
+            if (data['workMode'] == 'WFH') {
+              isWfhMode = true;
             }
 
             if (data["checkInTime"] != null) {
@@ -296,6 +341,7 @@ class _HomePageState extends State<HomePage> {
                   padding: const EdgeInsets.fromLTRB(16, 16, 16, 30),
                   child: Column(
                     children: [
+                      // ✅ TAMPILAN BANNER JIKA SEDANG IZIN/DINAS
                       if (isLeaveDay)
                         Container(
                           margin: const EdgeInsets.only(bottom: 16),
@@ -318,6 +364,37 @@ class _HomePageState extends State<HomePage> {
                                   "Anda tercatat sedang $leaveStatus hari ini. Fitur absensi normal dinonaktifkan sementara.",
                                   style: TextStyle(
                                     color: Colors.orange.shade800,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                      // ✅ BANNER BARU: TAMPIL JIKA HARI INI WFH (Dan sedang tidak Izin/Dinas)
+                      else if (isWfhMode)
+                        Container(
+                          margin: const EdgeInsets.only(bottom: 16),
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: Colors.green.shade50,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: Colors.green.shade200),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(
+                                Icons.home_work,
+                                color: Colors.green,
+                                size: 28,
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Text(
+                                  "Mode WFH Aktif Hari Ini. Verifikasi radius koordinat dari lokasi kantor dinonaktifkan.",
+                                  style: TextStyle(
+                                    color: Colors.green.shade800,
                                     fontSize: 13,
                                     fontWeight: FontWeight.w600,
                                   ),
@@ -473,15 +550,12 @@ class _HomePageState extends State<HomePage> {
                         ),
                       ),
                       const SizedBox(height: 16),
-                      // ✅ PENAMBAHAN FUNGSI ENABLED DI SINI
                       _menuWideButton(
                         icon: Icons.edit_document,
                         label: isLeaveDay
-                            ? "Permohonan (Sudah Diajukan)"
-                            : "Permohonan Izin / Dinas",
-                        enabled:
-                            !isLeaveDay &&
-                            !sudahMasuk, // Tombol mati jika sudah izin/absen masuk
+                            ? "Pengajuan (Sudah Diajukan)"
+                            : "Pengajuan Izin / Dinas",
+                        enabled: !isLeaveDay,
                         colorStart: const Color(0xFFE67E22),
                         colorEnd: const Color(0xFFD35400),
                         onTap: () {
@@ -500,7 +574,7 @@ class _HomePageState extends State<HomePage> {
                       _menuWideButton(
                         icon: Icons.history,
                         label: "Riwayat Absensi",
-                        enabled: true, // Riwayat selalu aktif
+                        enabled: true,
                         colorStart: const Color(0xFF7A0C10),
                         colorEnd: const Color(0xFFB31217),
                         onTap: () {
@@ -739,14 +813,13 @@ class PremiumMenuButtonWide extends StatelessWidget {
   }
 }
 
-// ✅ PENAMBAHAN PARAMETER ENABLED PADA WIDGET _menuWideButton
 Widget _menuWideButton({
   required IconData icon,
   required String label,
   required VoidCallback onTap,
   required Color colorStart,
   required Color colorEnd,
-  required bool enabled, // Properti tambahan untuk lock
+  bool enabled = true,
 }) {
   return InkWell(
     borderRadius: BorderRadius.circular(16),
@@ -755,7 +828,6 @@ Widget _menuWideButton({
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
-        // Jika mati, tombol berubah warna jadi abu-abu
         gradient: LinearGradient(
           colors: enabled
               ? [colorStart, colorEnd]
@@ -779,7 +851,6 @@ Widget _menuWideButton({
               ),
             ),
           ),
-          // Sembunyikan ikon panah jika tombol mati
           if (enabled) const Icon(Icons.chevron_right, color: Colors.white),
         ],
       ),

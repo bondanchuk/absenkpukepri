@@ -28,7 +28,6 @@ class _PengajuanPageState extends State<PengajuanPage> {
 
   Future<void> _pickImage() async {
     final picker = ImagePicker();
-    // Bisa pilih dari galeri atau kamera untuk surat tugas/surat sakit
     final picked = await picker.pickImage(
       source: ImageSource.camera,
       imageQuality: 80,
@@ -51,7 +50,6 @@ class _PengajuanPageState extends State<PengajuanPage> {
       return;
     }
 
-    // Validasi: Perjalanan Dinas WAJIB upload dokumen
     if (_selectedType == "Perjalanan Dinas" && _attachmentPreview == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -72,12 +70,7 @@ class _PengajuanPageState extends State<PengajuanPage> {
           .collection("attendance")
           .doc(docId);
 
-      final existingDoc = await docRef.get();
-      if (existingDoc.exists && existingDoc.data()?['checkInTime'] != null) {
-        throw Exception(
-          "Anda sudah absen masuk hari ini. Tidak bisa mengajukan $_selectedType.",
-        );
-      }
+      // (Blok validasi pengecekan absen masuk sebelumnya sudah dihapus dari sini)
 
       String? attachmentUrl;
       if (_attachmentPreview != null) {
@@ -89,20 +82,32 @@ class _PengajuanPageState extends State<PengajuanPage> {
         }
       }
 
-      // Simpan ke Firestore
+      // Simpan ke Firestore dan HAPUS data absen masuk/pulang jika ada
       await docRef.set({
         "nip": widget.nip,
         "date": DateFormat("yyyy-MM-dd").format(now),
-        "status": _selectedType, // Penanda khusus Izin/Sakit/Dinas
+        "status": _selectedType,
         "reason": _reasonController.text.trim(),
         "attachmentUrl": attachmentUrl,
         "createdAt": FieldValue.serverTimestamp(),
+
+        // Menghapus field absensi reguler secara paksa
+        "checkInTime": FieldValue.delete(),
+        "checkInLoc": FieldValue.delete(),
+        "checkInImageUrl": FieldValue.delete(),
+        "checkOutTime": FieldValue.delete(),
+        "checkOutLoc": FieldValue.delete(),
+        "checkOutImageUrl": FieldValue.delete(),
+        "performanceReport": FieldValue.delete(),
+        "reportSubmitted": FieldValue.delete(),
       }, SetOptions(merge: true));
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text("✅ Permohonan $_selectedType berhasil dikirim!"),
+          content: Text(
+            "✅ Permohonan $_selectedType berhasil dikirim! Absensi hari ini telah disesuaikan.",
+          ),
         ),
       );
       Navigator.pop(context);

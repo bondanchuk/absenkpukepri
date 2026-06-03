@@ -21,6 +21,9 @@ class _CheckInPageState extends State<CheckInPage> {
   bool _isLoadingData = true;
   bool _isSecurity = false;
 
+  // ✅ Variabel penampung status WFH Dinamis
+  bool isWfhToday = false;
+
   String? selectedShift;
   String debugInfo = "";
   File? selfiePreview;
@@ -33,7 +36,42 @@ class _CheckInPageState extends State<CheckInPage> {
   @override
   void initState() {
     super.initState();
-    _fetchUserData();
+    _initializeApp();
+  }
+
+  // ✅ Menjalankan pengecekan secara berurutan
+  Future<void> _initializeApp() async {
+    await _checkWfhStatus(); // Cek status WFH dinamis terlebih dahulu
+    await _fetchUserData(); // Lalu cek jabatan user
+  }
+
+  // ✅ FUNGSI BACA PENGATURAN WFH DARI FIRESTORE
+  Future<void> _checkWfhStatus() async {
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection("settings")
+          .doc("wfh_config")
+          .get();
+      if (doc.exists) {
+        final data = doc.data()!;
+        List<dynamic> wfhDays = data['wfh_days'] ?? [];
+        List<dynamic> wfhDates = data['wfh_dates'] ?? [];
+
+        final now = DateTime.now();
+        final todayString = DateFormat("yyyy-MM-dd").format(now);
+
+        // Cek apakah hari (1-7) atau tanggal (yyyy-mm-dd) cocok dengan aturan di DB
+        if (wfhDays.contains(now.weekday) || wfhDates.contains(todayString)) {
+          if (mounted) {
+            setState(() {
+              isWfhToday = true;
+            });
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint("Gagal cek WFH status: $e");
+    }
   }
 
   Future<void> _fetchUserData() async {
@@ -53,9 +91,11 @@ class _CheckInPageState extends State<CheckInPage> {
     } catch (e) {
       debugPrint("Gagal mengambil data jabatan: $e");
     } finally {
-      setState(() {
-        _isLoadingData = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoadingData = false;
+        });
+      }
     }
   }
 
@@ -83,15 +123,12 @@ class _CheckInPageState extends State<CheckInPage> {
     setState(() => _loading = true);
 
     try {
-      bool isFriday = DateTime.now().weekday == DateTime.friday;
-      bool isWfh = isFriday; // WFH jika hari Jumat
-
       double lat = 0.0;
       double lng = 0.0;
       double dist = 0.0;
 
-      // Pengecekan GPS dilewati otomatis pada hari Jumat
-      if (!isWfh) {
+      // ✅ Pengecekan GPS dilewati otomatis jika isWfhToday bernilai true
+      if (!isWfhToday) {
         final pos = await LocationService.getCurrentPosition();
         dist = LocationService.distanceInMeters(
           pos.latitude,
@@ -149,7 +186,7 @@ class _CheckInPageState extends State<CheckInPage> {
         "checkInLat": lat,
         "checkInLng": lng,
         "distanceIn": dist,
-        "workMode": isWfh ? "WFH" : "WFO",
+        "workMode": isWfhToday ? "WFH" : "WFO",
         "checkInSelfieUrl": selfieUrl,
         "shift": _isSecurity ? selectedShift : "Non-Shift",
         "createdAt": FieldValue.serverTimestamp(),
@@ -163,7 +200,7 @@ class _CheckInPageState extends State<CheckInPage> {
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("$e")));
     } finally {
-      setState(() => _loading = false);
+      if (mounted) setState(() => _loading = false);
     }
   }
 
@@ -214,8 +251,6 @@ class _CheckInPageState extends State<CheckInPage> {
       );
     }
 
-    bool isFriday = DateTime.now().weekday == DateTime.friday;
-    bool isWfh = isFriday;
     bool cannotAbsen = isSecurityAndOutsideShift();
 
     return Scaffold(
@@ -250,7 +285,7 @@ class _CheckInPageState extends State<CheckInPage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    _isSecurity ? "Jadwal Shift" : "Jadwal Reguler",
+                    _isSecurity ? "Absen Shift" : "Absen Pegawai",
                     style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
@@ -309,7 +344,7 @@ class _CheckInPageState extends State<CheckInPage> {
                     ),
                   ] else ...[
                     infoBox(
-                      "Waktu Absen",
+                      "Waktu Kehadiran",
                       "06.00 - 09.00 WIB",
                       Icons.access_time_filled,
                       Colors.green,
@@ -317,12 +352,14 @@ class _CheckInPageState extends State<CheckInPage> {
                   ],
 
                   const SizedBox(height: 12),
-                  // ✅ Teks Info GPS dipertegas untuk hari Jumat
+                  // ✅ Teks UI Otomatis Menyesuaikan Mode WFH
                   infoBox(
-                    isWfh ? "Mode WFH Aktif" : "Lokasi",
-                    isWfh ? "Tanpa akses GPS / Lokasi" : "Harus di area kantor",
-                    isWfh ? Icons.location_off : Icons.my_location,
-                    isWfh ? Colors.green : Colors.blue,
+                    isWfhToday ? "Mode WFH Aktif" : "Lokasi & Radius",
+                    isWfhToday
+                        ? "Tanpa akses GPS / Lokasi"
+                        : "Pastikan di area kantor",
+                    isWfhToday ? Icons.location_off : Icons.my_location,
+                    isWfhToday ? Colors.green : Colors.blue,
                   ),
 
                   if (selfiePreview != null) ...[
