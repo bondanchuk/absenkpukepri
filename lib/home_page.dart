@@ -10,6 +10,7 @@ import 'checkin_page.dart';
 import 'checkout_page.dart';
 import 'report_page.dart';
 import 'attendance_history_page.dart';
+import 'pengajuan_page.dart'; // ✅ Import halaman pengajuan baru
 
 class HomePage extends StatefulWidget {
   final String nip;
@@ -137,12 +138,24 @@ class _HomePageState extends State<HomePage> {
           bool sudahPulang = false;
           bool sudahReport = false;
 
+          // ✅ Variabel Status Izin/Sakit/Dinas
+          bool isLeaveDay = false;
+          String leaveStatus = "";
+
           String masukJam = "-";
           String pulangJam = "-";
           String reportStatus = "-";
 
           if (snapshot.hasData && snapshot.data!.exists) {
             final data = snapshot.data!.data() as Map<String, dynamic>;
+
+            // ✅ Cek apakah hari ini ada status pengajuan
+            if (data['status'] != null && data['status'] != 'valid') {
+              isLeaveDay = true;
+              leaveStatus =
+                  data['status']; // "Izin", "Sakit", atau "Perjalanan Dinas"
+            }
+
             if (data["checkInTime"] != null) {
               sudahMasuk = true;
               masukJam = DateFormat(
@@ -165,11 +178,14 @@ class _HomePageState extends State<HomePage> {
           bool isTimeForCheckout = currentHour >= 15;
           bool isTimeForReport = currentHour >= 17;
 
-          if (!sudahPulang) {
+          if (!sudahPulang && !isLeaveDay) {
             sudahReport = false;
             reportStatus = isTimeForReport
                 ? "Bisa diisi (Tanpa pulang)"
                 : "Isi setelah pulang";
+          } else if (isLeaveDay) {
+            // ✅ Jika sedang izin/dinas, tidak wajib laporan kinerja
+            reportStatus = "Tidak wajib (Sedang $leaveStatus)";
           }
 
           return CustomScrollView(
@@ -177,17 +193,12 @@ class _HomePageState extends State<HomePage> {
             slivers: [
               SliverAppBar(
                 pinned: true,
-                expandedHeight: 115, // ✅ Dikecilkan dari 140 menjadi 115
+                expandedHeight: 115, // Header kecil
                 backgroundColor: const Color(0xFF7A0C10),
                 automaticallyImplyLeading: false,
                 flexibleSpace: FlexibleSpaceBar(
                   background: Padding(
-                    padding: const EdgeInsets.fromLTRB(
-                      20,
-                      40,
-                      10,
-                      10,
-                    ), // ✅ Padding atas disesuaikan
+                    padding: const EdgeInsets.fromLTRB(20, 40, 10, 10),
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -205,15 +216,14 @@ class _HomePageState extends State<HomePage> {
                               Text(
                                 widget.name.toUpperCase(),
                                 style: const TextStyle(
-                                  fontSize:
-                                      17, // ✅ Sedikit disesuaikan agar proporsional
+                                  fontSize: 17,
                                   fontWeight: FontWeight.bold,
                                   color: Colors.white,
                                 ),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
-                              const SizedBox(height: 2), // ✅ Spasi dirapatkan
+                              const SizedBox(height: 2),
                               StreamBuilder<DocumentSnapshot>(
                                 stream: userRef.snapshots(),
                                 builder: (context, userSnap) {
@@ -238,7 +248,7 @@ class _HomePageState extends State<HomePage> {
                                   );
                                 },
                               ),
-                              const SizedBox(height: 6), // ✅ Spasi dirapatkan
+                              const SizedBox(height: 6),
                               Row(
                                 children: [
                                   Text(
@@ -287,6 +297,38 @@ class _HomePageState extends State<HomePage> {
                   padding: const EdgeInsets.fromLTRB(16, 16, 16, 30),
                   child: Column(
                     children: [
+                      // ✅ TAMPILAN BANNER JIKA SEDANG IZIN/DINAS
+                      if (isLeaveDay)
+                        Container(
+                          margin: const EdgeInsets.only(bottom: 16),
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: Colors.orange.shade50,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: Colors.orange.shade200),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(
+                                Icons.info_outline,
+                                color: Colors.orange,
+                                size: 28,
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Text(
+                                  "Anda tercatat sedang $leaveStatus hari ini. Fitur absensi normal dinonaktifkan sementara.",
+                                  style: TextStyle(
+                                    color: Colors.orange.shade800,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+
                       _premiumCard(
                         child: Padding(
                           padding: const EdgeInsets.all(14),
@@ -306,9 +348,11 @@ class _HomePageState extends State<HomePage> {
                                   Expanded(
                                     child: _statusTile(
                                       title: "Masuk",
-                                      subtitle: sudahMasuk ? masukJam : "Belum",
+                                      subtitle: isLeaveDay
+                                          ? leaveStatus
+                                          : (sudahMasuk ? masukJam : "Belum"),
                                       icon: Icons.login,
-                                      active: sudahMasuk,
+                                      active: sudahMasuk || isLeaveDay,
                                       color: Colors.green,
                                     ),
                                   ),
@@ -316,11 +360,11 @@ class _HomePageState extends State<HomePage> {
                                   Expanded(
                                     child: _statusTile(
                                       title: "Pulang",
-                                      subtitle: sudahPulang
-                                          ? pulangJam
-                                          : "Belum",
+                                      subtitle: isLeaveDay
+                                          ? leaveStatus
+                                          : (sudahPulang ? pulangJam : "Belum"),
                                       icon: Icons.logout,
-                                      active: sudahPulang,
+                                      active: sudahPulang || isLeaveDay,
                                       color: Colors.blue,
                                     ),
                                   ),
@@ -331,7 +375,7 @@ class _HomePageState extends State<HomePage> {
                                 title: "Laporan Kinerja",
                                 subtitle: reportStatus,
                                 icon: Icons.assignment,
-                                active: sudahReport,
+                                active: sudahReport || isLeaveDay,
                                 color: Colors.orange,
                                 fullWidth: true,
                               ),
@@ -360,7 +404,9 @@ class _HomePageState extends State<HomePage> {
                                     child: PremiumMenuButton(
                                       icon: Icons.login,
                                       label: "Absen Masuk",
-                                      enabled: !sudahMasuk,
+                                      enabled:
+                                          !sudahMasuk &&
+                                          !isLeaveDay, // ✅ Block jika sedang Izin/Dinas
                                       onTap: () {
                                         HapticFeedback.lightImpact();
                                         Navigator.push(
@@ -380,7 +426,8 @@ class _HomePageState extends State<HomePage> {
                                       label: "Absen Pulang",
                                       enabled:
                                           !sudahPulang &&
-                                          (sudahMasuk || isTimeForCheckout),
+                                          (sudahMasuk || isTimeForCheckout) &&
+                                          !isLeaveDay, // ✅ Block jika sedang Izin/Dinas
                                       onTap: () {
                                         HapticFeedback.lightImpact();
                                         Navigator.push(
@@ -399,16 +446,19 @@ class _HomePageState extends State<HomePage> {
                               PremiumMenuButtonWide(
                                 icon: Icons.assignment,
                                 label: "Laporan Kinerja",
-                                subtitle: sudahReport
-                                    ? "Sudah dikirim ✅"
-                                    : (sudahPulang
-                                          ? "Isi laporan hari ini"
-                                          : (isTimeForReport
-                                                ? "Isi sekarang (Lupa pulang)"
-                                                : "Isi setelah pulang")),
+                                subtitle: isLeaveDay
+                                    ? "Otomatis diisi sistem"
+                                    : (sudahReport
+                                          ? "Sudah dikirim ✅"
+                                          : (sudahPulang
+                                                ? "Isi laporan hari ini"
+                                                : (isTimeForReport
+                                                      ? "Isi sekarang (Lupa pulang)"
+                                                      : "Isi setelah pulang"))),
                                 enabled:
                                     !sudahReport &&
-                                    (sudahPulang || isTimeForReport),
+                                    (sudahPulang || isTimeForReport) &&
+                                    !isLeaveDay, // ✅ Block jika sedang Izin/Dinas
                                 onTap: () {
                                   HapticFeedback.lightImpact();
                                   Navigator.push(
@@ -427,9 +477,33 @@ class _HomePageState extends State<HomePage> {
                         ),
                       ),
                       const SizedBox(height: 16),
+
+                      // ✅ TOMBOL BARU UNTUK PENGAJUAN IZIN/DINAS
+                      _menuWideButton(
+                        icon: Icons.edit_document,
+                        label: "Pengajuan Izin / Dinas",
+                        colorStart: const Color(0xFFE67E22),
+                        colorEnd: const Color(0xFFD35400),
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => PengajuanPage(
+                                nip: widget.nip,
+                                name: widget.name,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 12),
+
+                      // Tombol Riwayat Absensi Bawaan
                       _menuWideButton(
                         icon: Icons.history,
                         label: "Riwayat Absensi",
+                        colorStart: const Color(0xFF7A0C10),
+                        colorEnd: const Color(0xFFB31217),
                         onTap: () {
                           Navigator.push(
                             context,
@@ -561,7 +635,7 @@ class PremiumMenuButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color bg = enabled ? const Color(0xFF1565C0) : Colors.grey.shade500;
+    final Color bg = enabled ? const Color(0xFF1565C0) : Colors.grey.shade400;
     return Material(
       color: bg,
       borderRadius: BorderRadius.circular(18),
@@ -617,7 +691,7 @@ class PremiumMenuButtonWide extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color bg = enabled ? const Color(0xFF1565C0) : Colors.grey.shade500;
+    final Color bg = enabled ? const Color(0xFF1565C0) : Colors.grey.shade400;
     return Material(
       color: bg,
       borderRadius: BorderRadius.circular(18),
@@ -670,6 +744,8 @@ Widget _menuWideButton({
   required IconData icon,
   required String label,
   required VoidCallback onTap,
+  required Color colorStart,
+  required Color colorEnd,
 }) {
   return InkWell(
     borderRadius: BorderRadius.circular(16),
@@ -678,8 +754,8 @@ Widget _menuWideButton({
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF7A0C10), Color(0xFFB31217)],
+        gradient: LinearGradient(
+          colors: [colorStart, colorEnd],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
