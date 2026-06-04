@@ -22,6 +22,14 @@ class _PengajuanPageState extends State<PengajuanPage> {
 
   String? _selectedType;
   final TextEditingController _reasonController = TextEditingController();
+
+  // ✅ Menggunakan variabel integer untuk dropdown jumlah hari (Default 1 Hari)
+  int _selectedDays = 1;
+  final List<int> _daysList = List.generate(
+    30,
+    (index) => index + 1,
+  ); // Pilihan 1-30 hari
+
   File? _attachmentPreview;
 
   final List<String> _kategori = ["Izin", "Sakit", "Perjalanan Dinas"];
@@ -64,13 +72,8 @@ class _PengajuanPageState extends State<PengajuanPage> {
     setState(() => _loading = true);
 
     try {
-      final now = DateTime.now();
-      final docId = "${widget.nip}_${DateFormat("yyyyMMdd").format(now)}";
-      final docRef = FirebaseFirestore.instance
-          .collection("attendance")
-          .doc(docId);
-
-      // (Blok validasi pengecekan absen masuk sebelumnya sudah dihapus dari sini)
+      // ✅ Menggunakan nilai dari dropdown langsung
+      int totalDays = _selectedDays;
 
       String? attachmentUrl;
       if (_attachmentPreview != null) {
@@ -82,31 +85,62 @@ class _PengajuanPageState extends State<PengajuanPage> {
         }
       }
 
-      // Simpan ke Firestore dan HAPUS data absen masuk/pulang jika ada
-      await docRef.set({
-        "nip": widget.nip,
-        "date": DateFormat("yyyy-MM-dd").format(now),
-        "status": _selectedType,
-        "reason": _reasonController.text.trim(),
-        "attachmentUrl": attachmentUrl,
-        "createdAt": FieldValue.serverTimestamp(),
+      // Menggunakan WriteBatch untuk menyimpan data dalam beberapa hari sekaligus
+      WriteBatch batch = FirebaseFirestore.instance.batch();
+      final now = DateTime.now();
 
-        // Menghapus field absensi reguler secara paksa
-        "checkInTime": FieldValue.delete(),
-        "checkInLoc": FieldValue.delete(),
-        "checkInImageUrl": FieldValue.delete(),
-        "checkOutTime": FieldValue.delete(),
-        "checkOutLoc": FieldValue.delete(),
-        "checkOutImageUrl": FieldValue.delete(),
-        "performanceReport": FieldValue.delete(),
-        "reportSubmitted": FieldValue.delete(),
-      }, SetOptions(merge: true));
+      // Looping sebanyak jumlah hari yang diajukan
+      for (int i = 0; i < totalDays; i++) {
+        final targetDate = now.add(
+          Duration(days: i),
+        ); // Tambahkan hari (0 = hari ini, 1 = besok, dst)
+        final docId =
+            "${widget.nip}_${DateFormat("yyyyMMdd").format(targetDate)}";
+        final docRef = FirebaseFirestore.instance
+            .collection("attendance")
+            .doc(docId);
+
+        // Tambahkan perintah set ke dalam batch
+        batch.set(docRef, {
+          "nip": widget.nip,
+          "date": DateFormat("yyyy-MM-dd").format(targetDate),
+          "status": _selectedType,
+          "reason": _reasonController.text.trim(),
+          "attachmentUrl": attachmentUrl,
+          "createdAt": FieldValue.serverTimestamp(),
+
+          // Menghapus field absensi reguler secara paksa (jika ada data yang telanjur masuk)
+          "checkInTime": FieldValue.delete(),
+          "checkInLoc": FieldValue.delete(),
+          "checkInLat": FieldValue.delete(),
+          "checkInLng": FieldValue.delete(),
+          "distanceIn": FieldValue.delete(),
+          "checkInImageUrl": FieldValue.delete(),
+          "checkInSelfieUrl": FieldValue.delete(),
+
+          "checkOutTime": FieldValue.delete(),
+          "checkOutLoc": FieldValue.delete(),
+          "checkOutLat": FieldValue.delete(),
+          "checkOutLng": FieldValue.delete(),
+          "distanceOut": FieldValue.delete(),
+          "checkOutImageUrl": FieldValue.delete(),
+          "checkOutSelfieUrl": FieldValue.delete(),
+
+          "workMode": FieldValue.delete(),
+          "shift": FieldValue.delete(),
+          "performanceReport": FieldValue.delete(),
+          "reportSubmitted": FieldValue.delete(),
+        }, SetOptions(merge: true));
+      }
+
+      // Eksekusi (Commit) seluruh perulangan hari ke Firestore sekaligus
+      await batch.commit();
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            "✅ Permohonan $_selectedType berhasil dikirim! Absensi hari ini telah disesuaikan.",
+            "✅ Permohonan $_selectedType selama $totalDays hari berhasil dikirim!",
           ),
         ),
       );
@@ -199,6 +233,53 @@ class _PengajuanPageState extends State<PengajuanPage> {
                               .toList(),
                           onChanged: (val) {
                             setState(() => _selectedType = val);
+                          },
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // ✅ DROPDOWN BARU: JUMLAH HARI
+                    const Text(
+                      "Jumlah Hari",
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF8FAFD),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.grey.shade300),
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<int>(
+                          isExpanded: true,
+                          value: _selectedDays,
+                          icon: const Icon(
+                            Icons.arrow_drop_down,
+                            color: Color(0xFF7A0C10),
+                          ),
+                          items: _daysList
+                              .map(
+                                (day) => DropdownMenuItem<int>(
+                                  value: day,
+                                  child: Text(
+                                    "$day Hari",
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                              )
+                              .toList(),
+                          onChanged: (val) {
+                            if (val != null) {
+                              setState(() => _selectedDays = val);
+                            }
                           },
                         ),
                       ),

@@ -31,7 +31,7 @@ class _CheckInPageState extends State<CheckInPage> {
   // Koordinat Kantor
   final double officeLat = 0.8969112;
   final double officeLng = 104.4773251;
-  final double radiusMeters = 350; // Radius 350m untuk selain hari Jumat
+  final double radiusMeters = 350;
 
   @override
   void initState() {
@@ -39,13 +39,11 @@ class _CheckInPageState extends State<CheckInPage> {
     _initializeApp();
   }
 
-  // ✅ Menjalankan pengecekan secara berurutan
   Future<void> _initializeApp() async {
-    await _checkWfhStatus(); // Cek status WFH dinamis terlebih dahulu
-    await _fetchUserData(); // Lalu cek jabatan user
+    await _checkWfhStatus();
+    await _fetchUserData();
   }
 
-  // ✅ FUNGSI BACA PENGATURAN WFH DARI FIRESTORE
   Future<void> _checkWfhStatus() async {
     try {
       final doc = await FirebaseFirestore.instance
@@ -60,7 +58,6 @@ class _CheckInPageState extends State<CheckInPage> {
         final now = DateTime.now();
         final todayString = DateFormat("yyyy-MM-dd").format(now);
 
-        // Cek apakah hari (1-7) atau tanggal (yyyy-mm-dd) cocok dengan aturan di DB
         if (wfhDays.contains(now.weekday) || wfhDates.contains(todayString)) {
           if (mounted) {
             setState(() {
@@ -99,23 +96,32 @@ class _CheckInPageState extends State<CheckInPage> {
     }
   }
 
-  bool isSecurityAndOutsideShift() {
-    if (!_isSecurity || selectedShift == null) return false;
-
+  // ✅ LOGIKA BARU: BATAS WAKTU ABSEN MASUK
+  bool isOutsideCheckInTime() {
     final now = DateTime.now();
-    if (selectedShift == "Shift 1") return now.hour < 6 || now.hour >= 8;
-    if (selectedShift == "Shift 2") return now.hour < 14 || now.hour >= 16;
-    if (selectedShift == "Shift 3") return now.hour < 22;
+
+    // Aturan untuk Security (Sesuai Shift)
+    if (_isSecurity && selectedShift != null) {
+      if (selectedShift == "Shift 1") return now.hour < 6 || now.hour >= 8;
+      if (selectedShift == "Shift 2") return now.hour < 14 || now.hour >= 16;
+      if (selectedShift == "Shift 3") return now.hour < 22;
+      return false;
+    }
+
+    // Aturan untuk Pegawai Reguler (05:30 s/d 09:00 WIB)
+    final minutes = now.hour * 60 + now.minute;
+    if (minutes < 330 || minutes > 540) {
+      // 330 = 05:30, 540 = 09:00
+      return true;
+    }
 
     return false;
   }
 
   Future<void> checkIn() async {
-    if (isSecurityAndOutsideShift()) {
+    if (isOutsideCheckInTime()) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("❌ Anda tidak bisa absen di luar jam shift."),
-        ),
+        const SnackBar(content: Text("❌ Anda berada di luar jam absen masuk.")),
       );
       return;
     }
@@ -127,7 +133,6 @@ class _CheckInPageState extends State<CheckInPage> {
       double lng = 0.0;
       double dist = 0.0;
 
-      // ✅ Pengecekan GPS dilewati otomatis jika isWfhToday bernilai true
       if (!isWfhToday) {
         final pos = await LocationService.getCurrentPosition();
         dist = LocationService.distanceInMeters(
@@ -251,7 +256,7 @@ class _CheckInPageState extends State<CheckInPage> {
       );
     }
 
-    bool cannotAbsen = isSecurityAndOutsideShift();
+    bool cannotAbsen = isOutsideCheckInTime();
 
     return Scaffold(
       backgroundColor: const Color(0xFFF4F6FA),
@@ -345,14 +350,15 @@ class _CheckInPageState extends State<CheckInPage> {
                   ] else ...[
                     infoBox(
                       "Waktu Kehadiran",
-                      "06.00 - 09.00 WIB",
+                      "05.30 - 09.00 WIB", // ✅ Aturan Baru
                       Icons.access_time_filled,
-                      Colors.green,
+                      cannotAbsen
+                          ? Colors.red
+                          : Colors.green, // ✅ Warna dinamis
                     ),
                   ],
 
                   const SizedBox(height: 12),
-                  // ✅ Teks UI Otomatis Menyesuaikan Mode WFH
                   infoBox(
                     isWfhToday ? "Mode WFH Aktif" : "Lokasi & Radius",
                     isWfhToday

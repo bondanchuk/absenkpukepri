@@ -23,7 +23,6 @@ class _CheckOutPageState extends State<CheckOutPage> {
   Map<String, dynamic>? _attendanceData;
   String? _activeDocId;
 
-  // ✅ Variabel penampung status WFH Dinamis
   bool isWfhToday = false;
 
   final double officeLat = 0.8969112;
@@ -38,13 +37,11 @@ class _CheckOutPageState extends State<CheckOutPage> {
     _initializeApp();
   }
 
-  // ✅ Menjalankan pengecekan secara berurutan
   Future<void> _initializeApp() async {
-    await _checkWfhStatus(); // Cek status WFH dinamis terlebih dahulu
-    await _fetchActiveAttendance(); // Baru cek history attendance
+    await _checkWfhStatus();
+    await _fetchActiveAttendance();
   }
 
-  // ✅ FUNGSI BACA PENGATURAN WFH DARI FIRESTORE
   Future<void> _checkWfhStatus() async {
     try {
       final doc = await FirebaseFirestore.instance
@@ -59,7 +56,6 @@ class _CheckOutPageState extends State<CheckOutPage> {
         final now = DateTime.now();
         final todayString = DateFormat("yyyy-MM-dd").format(now);
 
-        // Cek apakah hari (1-7) atau tanggal (yyyy-mm-dd) cocok dengan aturan di DB
         if (wfhDays.contains(now.weekday) || wfhDates.contains(todayString)) {
           if (mounted) {
             setState(() {
@@ -112,17 +108,21 @@ class _CheckOutPageState extends State<CheckOutPage> {
     }
   }
 
-  bool isTooEarly() {
+  // ✅ LOGIKA BARU: BATAS WAKTU ABSEN KELUAR
+  bool isOutsideCheckOutTime() {
     final now = DateTime.now();
     final shift = _attendanceData?['shift'] ?? "Non-Shift";
 
-    if (shift == "Shift 1")
-      return now.isBefore(DateTime(now.year, now.month, now.day, 15, 0));
-    if (shift == "Shift 2")
-      return now.isBefore(DateTime(now.year, now.month, now.day, 23, 0));
-    if (shift == "Shift 3") return now.hour < 7;
+    // Aturan Security
+    if (shift == "Shift 1") return now.hour < 15;
+    if (shift == "Shift 2") return now.hour < 23;
+    if (shift == "Shift 3") return now.hour >= 7; // Anggap pagi jika Shift 3
 
-    return now.isBefore(DateTime(now.year, now.month, now.day, 15, 0));
+    // Aturan Reguler: Absen keluar hanya boleh di atas jam 15.00
+    // Karena berakhir jam 23.59 (hari berganti), kita hanya perlu cek apakah kurang dari jam 15.00
+    if (now.hour < 15) return true;
+
+    return false;
   }
 
   Future<void> checkOut() async {
@@ -136,10 +136,10 @@ class _CheckOutPageState extends State<CheckOutPage> {
       return;
     }
 
-    if (isTooEarly()) {
+    if (isOutsideCheckOutTime()) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text("⏳ Belum waktunya absen pulang."),
+          content: Text("⏳ Anda berada di luar jam absen pulang."),
           backgroundColor: Colors.orange,
         ),
       );
@@ -153,7 +153,6 @@ class _CheckOutPageState extends State<CheckOutPage> {
           .collection("attendance")
           .doc(_activeDocId);
 
-      // ✅ Pastikan mode kerja valid: Berdasarkan data absen masuk ATAU aturan config WFH hari ini
       bool isWfhMode = (_attendanceData?['workMode'] == "WFH") || isWfhToday;
 
       double lat = 0.0;
@@ -229,8 +228,8 @@ class _CheckOutPageState extends State<CheckOutPage> {
   String getTimeInfoText() {
     final shift = _attendanceData?['shift'] ?? "Non-Shift";
     if (shift == "Shift 2") return "Pulang mulai 23.00 WIB";
-    if (shift == "Shift 3") return "Pulang mulai 07.00 WIB (Pagi)";
-    return "Pulang mulai 15.00 WIB";
+    if (shift == "Shift 3") return "Pulang sebelum 07.00 WIB";
+    return "15.00 - 23.59 WIB"; // ✅ Aturan Baru
   }
 
   Widget infoBox(String title, String value, IconData icon, Color color) {
@@ -280,9 +279,7 @@ class _CheckOutPageState extends State<CheckOutPage> {
       );
     }
 
-    final bool earlyStatus = isTooEarly();
-
-    // ✅ Status pengecekan tampilan UI
+    final bool cannotAbsen = isOutsideCheckOutTime();
     bool isWfhMode = (_attendanceData?['workMode'] == "WFH") || isWfhToday;
 
     return Scaffold(
@@ -325,14 +322,15 @@ class _CheckOutPageState extends State<CheckOutPage> {
                     ),
                   const SizedBox(height: 14),
                   infoBox(
-                    "Waktu Absen Pulang",
+                    "Waktu Kehadiran",
                     getTimeInfoText(),
                     Icons.access_time_filled,
-                    earlyStatus ? Colors.orange : Colors.green,
+                    cannotAbsen
+                        ? Colors.orange
+                        : Colors.green, // ✅ Warna dinamis
                   ),
                   const SizedBox(height: 12),
 
-                  // ✅ Teks UI Otomatis Menyesuaikan Mode WFH
                   infoBox(
                     isWfhMode ? "Mode WFH Aktif" : "Lokasi & Radius",
                     isWfhMode
@@ -363,21 +361,21 @@ class _CheckOutPageState extends State<CheckOutPage> {
               height: 54,
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: (_activeDocId == null || earlyStatus)
+                  backgroundColor: (_activeDocId == null || cannotAbsen)
                       ? Colors.grey
                       : const Color(0xFF7A0C10),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(18),
                   ),
                 ),
-                onPressed: (_loading || _activeDocId == null || earlyStatus)
+                onPressed: (_loading || _activeDocId == null || cannotAbsen)
                     ? null
                     : checkOut,
                 child: _loading
                     ? const CircularProgressIndicator(color: Colors.white)
                     : Text(
-                        earlyStatus
-                            ? "⏳ Belum Waktu Pulang"
+                        cannotAbsen
+                            ? "❌ Di Luar Waktu Pulang"
                             : "✅ Absen Pulang Sekarang",
                         style: const TextStyle(
                           fontSize: 15,
