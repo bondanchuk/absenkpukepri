@@ -21,17 +21,17 @@ class _CheckInPageState extends State<CheckInPage> {
   bool _isLoadingData = true;
   bool _isSecurity = false;
 
-  // ✅ Variabel penampung status WFH Dinamis
   bool isWfhToday = false;
 
   String? selectedShift;
   String debugInfo = "";
   File? selfiePreview;
 
-  // Koordinat Kantor
-  final double officeLat = 0.8969112;
-  final double officeLng = 104.4773251;
-  final double radiusMeters = 350;
+  // ✅ Inisialisasi awal variabel koordinat fleksibel (Akan ditimpa dari Firestore)
+  double officeLat = 0.8969112;
+  double officeLng = 104.4773251;
+  double radiusMeters = 350;
+  String officeName = "Area Kantor";
 
   @override
   void initState() {
@@ -41,7 +41,31 @@ class _CheckInPageState extends State<CheckInPage> {
 
   Future<void> _initializeApp() async {
     await _checkWfhStatus();
+    await _fetchLocationConfig(); // ✅ Memuat konfigurasi koordinat dari admin panel
     await _fetchUserData();
+  }
+
+  // ✅ FUNGSI AMBIL KOORDINAT DINAMIS DARI FIRESTORE
+  Future<void> _fetchLocationConfig() async {
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection("settings")
+          .doc("location_config")
+          .get();
+      if (doc.exists) {
+        final data = doc.data()!;
+        if (mounted) {
+          setState(() {
+            officeLat = (data['latitude'] as num).toDouble();
+            officeLng = (data['longitude'] as num).toDouble();
+            radiusMeters = (data['radius'] as num).toDouble();
+            officeName = data['location_name'] ?? "Area Kantor";
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint("Gagal memuat konfigurasi lokasi: $e");
+    }
   }
 
   Future<void> _checkWfhStatus() async {
@@ -96,11 +120,9 @@ class _CheckInPageState extends State<CheckInPage> {
     }
   }
 
-  // ✅ LOGIKA BARU: BATAS WAKTU ABSEN MASUK
   bool isOutsideCheckInTime() {
     final now = DateTime.now();
 
-    // Aturan untuk Security (Sesuai Shift)
     if (_isSecurity && selectedShift != null) {
       if (selectedShift == "Shift 1") return now.hour < 6 || now.hour >= 8;
       if (selectedShift == "Shift 2") return now.hour < 14 || now.hour >= 16;
@@ -108,14 +130,56 @@ class _CheckInPageState extends State<CheckInPage> {
       return false;
     }
 
-    // Aturan untuk Pegawai Reguler (05:30 s/d 09:00 WIB)
     final minutes = now.hour * 60 + now.minute;
     if (minutes < 330 || minutes > 540) {
-      // 330 = 05:30, 540 = 09:00
       return true;
     }
-
     return false;
+  }
+
+  void _showConfirmationDialog() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+          ),
+          title: const Text(
+            "Konfirmasi Absen",
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF7A0C10),
+            ),
+          ),
+          content: const Text(
+            "Apakah Anda yakin ingin mengirim data absensi masuk sekarang?",
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("Batal", style: TextStyle(color: Colors.grey)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF7A0C10),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              onPressed: () {
+                Navigator.pop(context);
+                checkIn();
+              },
+              child: const Text(
+                "Ya, Absen",
+                style: TextStyle(color: Colors.white),
+              ),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   Future<void> checkIn() async {
@@ -147,7 +211,7 @@ class _CheckInPageState extends State<CheckInPage> {
 
         if (dist > radiusMeters) {
           throw Exception(
-            "Anda berada di luar area kantor.\nJarak Anda: ${dist.toStringAsFixed(1)} meter",
+            "Anda di luar $officeName.\nJarak Anda: ${dist.toStringAsFixed(1)} meter (Batas: ${radiusMeters.toStringAsFixed(0)}m)",
           );
         }
 
@@ -350,20 +414,16 @@ class _CheckInPageState extends State<CheckInPage> {
                   ] else ...[
                     infoBox(
                       "Waktu Kehadiran",
-                      "05.30 - 09.00 WIB", // ✅ Aturan Baru
+                      "05.30 - 09.00 WIB",
                       Icons.access_time_filled,
-                      cannotAbsen
-                          ? Colors.red
-                          : Colors.green, // ✅ Warna dinamis
+                      cannotAbsen ? Colors.red : Colors.green,
                     ),
                   ],
 
                   const SizedBox(height: 12),
                   infoBox(
                     isWfhToday ? "Mode WFH Aktif" : "Lokasi & Radius",
-                    isWfhToday
-                        ? "Tanpa akses GPS / Lokasi"
-                        : "Pastikan di area kantor",
+                    isWfhToday ? "Tanpa akses GPS / Lokasi" : "$officeName",
                     isWfhToday ? Icons.location_off : Icons.my_location,
                     isWfhToday ? Colors.green : Colors.blue,
                   ),
@@ -396,7 +456,9 @@ class _CheckInPageState extends State<CheckInPage> {
                     borderRadius: BorderRadius.circular(18),
                   ),
                 ),
-                onPressed: (_loading || cannotAbsen) ? null : checkIn,
+                onPressed: (_loading || cannotAbsen)
+                    ? null
+                    : _showConfirmationDialog,
                 child: _loading
                     ? const CircularProgressIndicator(color: Colors.white)
                     : Text(

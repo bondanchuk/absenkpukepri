@@ -23,11 +23,14 @@ class _CheckOutPageState extends State<CheckOutPage> {
   Map<String, dynamic>? _attendanceData;
   String? _activeDocId;
 
+  // ✅ Variabel penampung status WFH Dinamis
   bool isWfhToday = false;
 
-  final double officeLat = 0.8969112;
-  final double officeLng = 104.4773251;
-  final double radiusMeters = 350;
+  // ✅ Mengubah variabel koordinat menjadi dinamis (Akan dimuat dari Firestore)
+  double officeLat = 0.8969112;
+  double officeLng = 104.4773251;
+  double radiusMeters = 350;
+  String officeName = "Area Kantor";
 
   File? selfiePreview;
 
@@ -37,9 +40,34 @@ class _CheckOutPageState extends State<CheckOutPage> {
     _initializeApp();
   }
 
+  // ✅ Menjalankan pengecekan secara berurutan saat halaman dibuka
   Future<void> _initializeApp() async {
     await _checkWfhStatus();
+    await _fetchLocationConfig(); // ✅ Mengambil konfigurasi koordinat dari database admin
     await _fetchActiveAttendance();
+  }
+
+  // ✅ FUNGSI BARU: MENGAMBIL TITIK KOORDINAT DINAMIS DARI FIRESTORE
+  Future<void> _fetchLocationConfig() async {
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection("settings")
+          .doc("location_config")
+          .get();
+      if (doc.exists) {
+        final data = doc.data()!;
+        if (mounted) {
+          setState(() {
+            officeLat = (data['latitude'] as num).toDouble();
+            officeLng = (data['longitude'] as num).toDouble();
+            radiusMeters = (data['radius'] as num).toDouble();
+            officeName = data['location_name'] ?? "Area Kantor";
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint("Gagal memuat konfigurasi lokasi checkout: $e");
+    }
   }
 
   Future<void> _checkWfhStatus() async {
@@ -108,18 +136,14 @@ class _CheckOutPageState extends State<CheckOutPage> {
     }
   }
 
-  // ✅ LOGIKA BARU: BATAS WAKTU ABSEN KELUAR
   bool isOutsideCheckOutTime() {
     final now = DateTime.now();
     final shift = _attendanceData?['shift'] ?? "Non-Shift";
 
-    // Aturan Security
     if (shift == "Shift 1") return now.hour < 15;
     if (shift == "Shift 2") return now.hour < 23;
-    if (shift == "Shift 3") return now.hour >= 7; // Anggap pagi jika Shift 3
+    if (shift == "Shift 3") return now.hour >= 7;
 
-    // Aturan Reguler: Absen keluar hanya boleh di atas jam 15.00
-    // Karena berakhir jam 23.59 (hari berganti), kita hanya perlu cek apakah kurang dari jam 15.00
     if (now.hour < 15) return true;
 
     return false;
@@ -173,7 +197,7 @@ class _CheckOutPageState extends State<CheckOutPage> {
 
         if (dist > radiusMeters) {
           throw Exception(
-            "Di luar area kantor.\nJarak: ${dist.toStringAsFixed(1)} m",
+            "Anda berada di luar $officeName.\nJarak Anda: ${dist.toStringAsFixed(1)} meter (Batas: ${radiusMeters.toStringAsFixed(0)}m)",
           );
         }
 
@@ -229,7 +253,7 @@ class _CheckOutPageState extends State<CheckOutPage> {
     final shift = _attendanceData?['shift'] ?? "Non-Shift";
     if (shift == "Shift 2") return "Pulang mulai 23.00 WIB";
     if (shift == "Shift 3") return "Pulang sebelum 07.00 WIB";
-    return "15.00 - 23.59 WIB"; // ✅ Aturan Baru
+    return "15.00 - 23.59 WIB";
   }
 
   Widget infoBox(String title, String value, IconData icon, Color color) {
@@ -325,17 +349,13 @@ class _CheckOutPageState extends State<CheckOutPage> {
                     "Waktu Kehadiran",
                     getTimeInfoText(),
                     Icons.access_time_filled,
-                    cannotAbsen
-                        ? Colors.orange
-                        : Colors.green, // ✅ Warna dinamis
+                    cannotAbsen ? Colors.orange : Colors.green,
                   ),
                   const SizedBox(height: 12),
 
                   infoBox(
                     isWfhMode ? "Mode WFH Aktif" : "Lokasi & Radius",
-                    isWfhMode
-                        ? "Tanpa akses GPS / Lokasi"
-                        : "Pastikan di area kantor",
+                    isWfhMode ? "Tanpa akses GPS / Lokasi" : "$officeName",
                     isWfhMode ? Icons.location_off : Icons.my_location,
                     isWfhMode ? Colors.green : Colors.blue,
                   ),

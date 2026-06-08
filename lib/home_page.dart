@@ -97,14 +97,21 @@ class _HomePageState extends State<HomePage> {
             "Konfirmasi Logout",
             style: TextStyle(
               fontWeight: FontWeight.bold,
+              fontSize: 20,
               color: Color(0xFF7A0C10),
             ),
           ),
-          content: const Text("Apakah Anda yakin ingin keluar dari aplikasi?"),
+          content: const Text(
+            "Apakah Anda yakin ingin keluar dari aplikasi?",
+            style: TextStyle(fontSize: 16),
+          ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text("Batal", style: TextStyle(color: Colors.grey)),
+              child: const Text(
+                "Batal",
+                style: TextStyle(color: Colors.grey, fontSize: 16),
+              ),
             ),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
@@ -127,7 +134,7 @@ class _HomePageState extends State<HomePage> {
               },
               child: const Text(
                 "Keluar",
-                style: TextStyle(color: Colors.white),
+                style: TextStyle(color: Colors.white, fontSize: 16),
               ),
             ),
           ],
@@ -237,12 +244,13 @@ class _HomePageState extends State<HomePage> {
             slivers: [
               SliverAppBar(
                 pinned: true,
-                expandedHeight: 115,
+                // ✅ Tinggi diturunkan menjadi 145 agar tidak ada ruang kosong berlebih di bawah
+                expandedHeight: 125,
                 backgroundColor: const Color(0xFF7A0C10),
                 automaticallyImplyLeading: false,
                 flexibleSpace: FlexibleSpaceBar(
                   background: Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 40, 10, 10),
+                    padding: const EdgeInsets.fromLTRB(25, 52, 10, 10),
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -253,21 +261,21 @@ class _HomePageState extends State<HomePage> {
                               Text(
                                 getGreeting(),
                                 style: const TextStyle(
-                                  fontSize: 12,
+                                  fontSize: 14,
                                   color: Colors.white70,
                                 ),
                               ),
                               Text(
                                 widget.name.toUpperCase(),
                                 style: const TextStyle(
-                                  fontSize: 17,
+                                  fontSize: 20,
                                   fontWeight: FontWeight.bold,
                                   color: Colors.white,
                                 ),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
-                              const SizedBox(height: 2),
+                              const SizedBox(height: 4),
                               StreamBuilder<DocumentSnapshot>(
                                 stream: userRef.snapshots(),
                                 builder: (context, userSnap) {
@@ -283,7 +291,7 @@ class _HomePageState extends State<HomePage> {
                                   return Text(
                                     jabatan,
                                     style: const TextStyle(
-                                      fontSize: 12,
+                                      fontSize: 14,
                                       fontWeight: FontWeight.w500,
                                       color: Colors.white70,
                                     ),
@@ -292,30 +300,30 @@ class _HomePageState extends State<HomePage> {
                                   );
                                 },
                               ),
-                              const SizedBox(height: 6),
+                              const SizedBox(height: 8),
                               Row(
                                 children: [
                                   Text(
                                     todayLabel(),
                                     style: const TextStyle(
-                                      fontSize: 11,
+                                      fontSize: 13,
                                       color: Colors.white54,
                                     ),
                                   ),
                                   const SizedBox(width: 8),
                                   Container(
                                     padding: const EdgeInsets.symmetric(
-                                      horizontal: 6,
-                                      vertical: 2,
+                                      horizontal: 8,
+                                      vertical: 3,
                                     ),
                                     decoration: BoxDecoration(
                                       color: Colors.black.withOpacity(0.2),
-                                      borderRadius: BorderRadius.circular(4),
+                                      borderRadius: BorderRadius.circular(6),
                                     ),
                                     child: Text(
                                       "$_currentTime WIB",
                                       style: const TextStyle(
-                                        fontSize: 10,
+                                        fontSize: 12,
                                         fontWeight: FontWeight.bold,
                                         color: Colors.white,
                                         letterSpacing: 1,
@@ -329,7 +337,11 @@ class _HomePageState extends State<HomePage> {
                         ),
                         IconButton(
                           onPressed: () => _showLogoutDialog(context),
-                          icon: const Icon(Icons.logout, color: Colors.white),
+                          icon: const Icon(
+                            Icons.logout,
+                            color: Colors.white,
+                            size: 28,
+                          ),
                         ),
                       ],
                     ),
@@ -341,11 +353,10 @@ class _HomePageState extends State<HomePage> {
                   padding: const EdgeInsets.fromLTRB(16, 16, 16, 30),
                   child: Column(
                     children: [
-                      // ✅ TAMPILAN BANNER JIKA SEDANG IZIN/DINAS
                       if (isLeaveDay)
                         Container(
                           margin: const EdgeInsets.only(bottom: 16),
-                          padding: const EdgeInsets.all(14),
+                          padding: const EdgeInsets.all(16),
                           decoration: BoxDecoration(
                             color: Colors.orange.shade50,
                             borderRadius: BorderRadius.circular(16),
@@ -356,15 +367,15 @@ class _HomePageState extends State<HomePage> {
                               const Icon(
                                 Icons.info_outline,
                                 color: Colors.orange,
-                                size: 28,
+                                size: 30,
                               ),
-                              const SizedBox(width: 12),
+                              const SizedBox(width: 14),
                               Expanded(
                                 child: Text(
                                   "Anda tercatat sedang $leaveStatus hari ini. Fitur absensi normal dinonaktifkan sementara.",
                                   style: TextStyle(
                                     color: Colors.orange.shade800,
-                                    fontSize: 13,
+                                    fontSize: 15,
                                     fontWeight: FontWeight.w600,
                                   ),
                                 ),
@@ -372,11 +383,10 @@ class _HomePageState extends State<HomePage> {
                             ],
                           ),
                         )
-                      // ✅ BANNER BARU: TAMPIL JIKA HARI INI WFH (Dan sedang tidak Izin/Dinas)
                       else if (isWfhMode)
                         Container(
                           margin: const EdgeInsets.only(bottom: 16),
-                          padding: const EdgeInsets.all(14),
+                          padding: const EdgeInsets.all(16),
                           decoration: BoxDecoration(
                             color: Colors.green.shade50,
                             borderRadius: BorderRadius.circular(16),
@@ -387,15 +397,15 @@ class _HomePageState extends State<HomePage> {
                               const Icon(
                                 Icons.home_work,
                                 color: Colors.green,
-                                size: 28,
+                                size: 30,
                               ),
-                              const SizedBox(width: 12),
+                              const SizedBox(width: 14),
                               Expanded(
                                 child: Text(
-                                  "Mode WFH Aktif Hari Ini. Verifikasi radius koordinat dari lokasi kantor dinonaktifkan.",
+                                  "Hari ini WFH",
                                   style: TextStyle(
                                     color: Colors.green.shade800,
-                                    fontSize: 13,
+                                    fontSize: 15,
                                     fontWeight: FontWeight.w600,
                                   ),
                                 ),
@@ -406,12 +416,12 @@ class _HomePageState extends State<HomePage> {
 
                       _premiumCard(
                         child: Padding(
-                          padding: const EdgeInsets.all(14),
+                          padding: const EdgeInsets.all(16),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               const Text(
-                                "Kehadiran Hari ini",
+                                "Status Kehadiran",
                                 style: TextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.bold,
@@ -492,7 +502,7 @@ class _HomePageState extends State<HomePage> {
                                       },
                                     ),
                                   ),
-                                  const SizedBox(width: 12),
+                                  const SizedBox(width: 14),
                                   Expanded(
                                     child: PremiumMenuButton(
                                       icon: Icons.logout,
@@ -515,7 +525,7 @@ class _HomePageState extends State<HomePage> {
                                   ),
                                 ],
                               ),
-                              const SizedBox(height: 12),
+                              const SizedBox(height: 14),
                               PremiumMenuButtonWide(
                                 icon: Icons.assignment,
                                 label: "Laporan Kinerja",
@@ -570,7 +580,7 @@ class _HomePageState extends State<HomePage> {
                           );
                         },
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 14),
                       _menuWideButton(
                         icon: Icons.history,
                         label: "Riwayat Absensi",
@@ -589,18 +599,19 @@ class _HomePageState extends State<HomePage> {
                           );
                         },
                       ),
-                      const SizedBox(height: 20),
+                      const SizedBox(height: 24),
                       const Text(
                         "KPU PROVINSI KEPRI",
                         style: TextStyle(
                           color: Colors.black54,
-                          fontSize: 12,
+                          fontSize: 14,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
+                      const SizedBox(height: 4),
                       const Text(
                         "BONDANCH@2026",
-                        style: TextStyle(color: Colors.black54, fontSize: 10),
+                        style: TextStyle(color: Colors.black54, fontSize: 12),
                       ),
                     ],
                   ),
@@ -631,6 +642,9 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  // Cari fungsi _statusTile di bagian bawah file home_page.dart Anda
+  // Lalu ganti dengan kode di bawah ini:
+
   Widget _statusTile({
     required String title,
     required String subtitle,
@@ -641,38 +655,44 @@ class _HomePageState extends State<HomePage> {
   }) {
     return Container(
       width: fullWidth ? double.infinity : null,
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.symmetric(
+        horizontal: 8,
+        vertical: 10,
+      ), // ✅ Padding diperkecil (sebelumnya 12-16)
       decoration: BoxDecoration(
         color: const Color(0xFFF8FAFD),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(12), // ✅ Radius diperkecil sedikit
         border: Border.all(color: Colors.grey.shade200),
       ),
       child: Row(
         children: [
           CircleAvatar(
-            radius: 20,
+            radius: 16, // ✅ Ukuran lingkaran icon diperkecil (sebelumnya 20-22)
             backgroundColor: color.withOpacity(0.15),
-            child: Icon(icon, color: color, size: 20),
+            child: Icon(icon, color: color, size: 16), // ✅ Icon diperkecil
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 6), // ✅ Jarak icon ke teks dipersempit
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
                   title,
                   style: const TextStyle(
                     fontWeight: FontWeight.bold,
-                    fontSize: 13,
+                    fontSize:
+                        14, // ✅ Font "Masuk" diperkecil (sebelumnya 13-14)
                   ),
                   maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                  overflow: TextOverflow
+                      .visible, // ✅ Biarkan teks terlihat jika sedikit melebihi
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 2),
                 Text(
                   subtitle,
                   style: TextStyle(
-                    fontSize: 11,
+                    fontSize: 13, // ✅ Font Jam diperkecil (sebelumnya 12)
                     color: active ? Colors.black87 : Colors.black54,
                     fontWeight: active ? FontWeight.bold : FontWeight.normal,
                   ),
@@ -683,8 +703,12 @@ class _HomePageState extends State<HomePage> {
             ),
           ),
           if (active) ...[
-            const SizedBox(width: 4),
-            const Icon(Icons.check_circle, color: Colors.green, size: 18),
+            const SizedBox(width: 2),
+            const Icon(
+              Icons.check_circle,
+              color: Colors.green,
+              size: 14,
+            ), // ✅ Icon centang diperkecil
           ],
         ],
       ),
@@ -716,16 +740,16 @@ class PremiumMenuButton extends StatelessWidget {
         borderRadius: BorderRadius.circular(18),
         onTap: enabled ? onTap : null,
         child: SizedBox(
-          height: 110,
+          height: 115, // ✅ Diturunkan menjadi 115 agar proporsional
           child: Padding(
             padding: const EdgeInsets.all(12),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 CircleAvatar(
-                  radius: 22,
+                  radius: 24,
                   backgroundColor: Colors.white.withOpacity(0.25),
-                  child: Icon(icon, color: Colors.white, size: 26),
+                  child: Icon(icon, color: Colors.white, size: 28),
                 ),
                 const SizedBox(height: 12),
                 Text(
@@ -733,7 +757,7 @@ class PremiumMenuButton extends StatelessWidget {
                   textAlign: TextAlign.center,
                   style: const TextStyle(
                     color: Colors.white,
-                    fontSize: 13,
+                    fontSize: 15,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
@@ -772,15 +796,15 @@ class PremiumMenuButtonWide extends StatelessWidget {
         borderRadius: BorderRadius.circular(18),
         onTap: enabled ? onTap : null,
         child: Container(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(16), // ✅ Padding dikembalikan ke 16
           child: Row(
             children: [
               CircleAvatar(
-                radius: 24,
+                radius: 26,
                 backgroundColor: Colors.white.withOpacity(0.25),
-                child: Icon(icon, color: Colors.white, size: 28),
+                child: Icon(icon, color: Colors.white, size: 30),
               ),
-              const SizedBox(width: 14),
+              const SizedBox(width: 16),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -789,22 +813,22 @@ class PremiumMenuButtonWide extends StatelessWidget {
                       label,
                       style: const TextStyle(
                         color: Colors.white,
-                        fontSize: 15,
+                        fontSize: 17,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-                    const SizedBox(height: 6),
+                    const SizedBox(height: 6), // ✅ Sedikit dirapatkan
                     Text(
                       subtitle,
                       style: const TextStyle(
                         color: Colors.white70,
-                        fontSize: 13,
+                        fontSize: 14,
                       ),
                     ),
                   ],
                 ),
               ),
-              const Icon(Icons.chevron_right, color: Colors.white),
+              const Icon(Icons.chevron_right, color: Colors.white, size: 28),
             ],
           ),
         ),
@@ -826,7 +850,10 @@ Widget _menuWideButton({
     onTap: enabled ? onTap : null,
     child: Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      padding: const EdgeInsets.symmetric(
+        horizontal: 16,
+        vertical: 14,
+      ), // ✅ Padding dikembalikan agar tidak kelonggaran
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: enabled
@@ -839,19 +866,20 @@ Widget _menuWideButton({
       ),
       child: Row(
         children: [
-          Icon(icon, color: Colors.white),
-          const SizedBox(width: 12),
+          Icon(icon, color: Colors.white, size: 28),
+          const SizedBox(width: 14),
           Expanded(
             child: Text(
               label,
               style: const TextStyle(
                 color: Colors.white,
-                fontSize: 14,
+                fontSize: 16,
                 fontWeight: FontWeight.bold,
               ),
             ),
           ),
-          if (enabled) const Icon(Icons.chevron_right, color: Colors.white),
+          if (enabled)
+            const Icon(Icons.chevron_right, color: Colors.white, size: 28),
         ],
       ),
     ),

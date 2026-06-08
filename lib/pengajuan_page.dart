@@ -32,7 +32,16 @@ class _PengajuanPageState extends State<PengajuanPage> {
 
   File? _attachmentPreview;
 
-  final List<String> _kategori = ["Izin", "Sakit", "Perjalanan Dinas"];
+  // ✅ Menambahkan kategori cuti baru ke dalam list
+  final List<String> _kategori = [
+    "Izin",
+    "Sakit",
+    "Perjalanan Dinas",
+    "Cuti Tahunan",
+    "Cuti Sakit",
+    "Cuti Melahirkan",
+    "Cuti Besar",
+  ];
 
   Future<void> _pickImage() async {
     final picker = ImagePicker();
@@ -239,7 +248,6 @@ class _PengajuanPageState extends State<PengajuanPage> {
                     ),
                     const SizedBox(height: 16),
 
-                    // ✅ DROPDOWN BARU: JUMLAH HARI
                     const Text(
                       "Jumlah Hari",
                       style: TextStyle(
